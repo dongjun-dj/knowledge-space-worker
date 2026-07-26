@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>收录到知识库</title>
+  <style>
+    body { width: 340px; margin: 0; padding: 14px; font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; }
+    h1 { font-size: 16px; margin: 0 0 10px; }
+    .hint { color: #667085; font-size: 12px; line-height: 1.5; margin: 8px 0; }
+    button { width: 100%; border: 0; border-radius: 10px; padding: 10px 12px; background: #4f46e5; color: white; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: not-allowed; }
+    button.secondary { background: #f3f4f6; color: #4f46e5; margin-top: 8px; font-weight: 500; position: relative; }
+    button.secondary:hover { background: #e5e7eb; }
+    a { color: #4f46e5; text-decoration: none; }
+    #status { margin-top: 10px; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+    .ok { color: #067647; }
+    .err { color: #b42318; }
+    #pendingBadge {
+      display: none; margin-left: 6px; background: #ef4444; color: white;
+      border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+    }
+    #pendingBadge.show { display: inline-block; }
+    .row-split { display: flex; gap: 8px; margin-top: 8px; }
+    .row-split button { flex: 1; }
+  </style>
+</head>
+<body>
+  <h1>收录到知识库</h1>
+  <div id="page" class="hint">正在读取当前页面...</div>
+  <button id="save">收录当前页/选中文本</button>
+  <div class="row-split">
+    <button id="openQueue" class="secondary">
+      📱 待处理队列<span id="pendingBadge">0</span>
+    </button>
+    <button id="openAdmin" class="secondary">📊 监控台</button>
+  </div>
+  <div class="hint">首次使用请先打开 <a id="options" href="#">插件设置</a> 填写 Token。</div>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

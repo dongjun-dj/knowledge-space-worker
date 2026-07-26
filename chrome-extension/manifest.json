@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "收录到知识库",
+  "version": "0.1.0",
+  "description": "一键收录当前网页、标题和选中文本到个人知识库。",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "notifications"],
+  "host_permissions": ["https://kb.dongjun.tech/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "收录到知识库",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

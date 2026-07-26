@@ -1,0 +1,22 @@
+name = "knowledge-space-worker"
+main = "src/worker.js"
+compatibility_date = "2026-05-03"
+
+# Production secrets should be configured with:
+# npx wrangler secret put INGEST_TOKEN
+# npx wrangler secret put NOTION_API_KEY
+# npx wrangler secret put NOTION_DATABASE_ID
+# npx wrangler secret put COZE_API_KEY
+# npx wrangler secret put COZE_WORKFLOW_ID
+# npx wrangler secret put DIFY_API_KEY
+# npx wrangler secret put DIFY_DATASET_ID
+# npx wrangler secret put DIFY_SEARCH_APP_ID
+
+[vars]
+NOTION_VERSION = "2022-06-28"
+DEFAULT_TOP_K = "5"
+
+[[d1_databases]]
+binding = "kb_logs"
+database_name = "kb-logs"
+database_id = "86240761-ee02-4a15-a2c4-5e746652d9a1"

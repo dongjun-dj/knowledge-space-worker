@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Knowledge Space Bookmarklet 生成器</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 880px; margin: 48px auto; padding: 0 20px; color: #222; }
+    h1 { font-size: 28px; }
+    label { display:block; margin: 18px 0 8px; font-weight: 600; }
+    input, textarea { width: 100%; box-sizing: border-box; font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; }
+    textarea { min-height: 140px; }
+    button, a.bookmarklet { display:inline-block; margin-top: 16px; padding: 10px 14px; border-radius: 8px; border: 0; background: #2563eb; color: white; text-decoration: none; font-weight: 700; cursor: pointer; }
+    .muted { color:#666; line-height: 1.6; }
+    .warn { background:#fff7ed; border:1px solid #fed7aa; padding:12px; border-radius:8px; }
+    code { background:#f5f5f5; padding:2px 4px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <h1>Knowledge Space Chrome 一键收藏书签生成器</h1>
+  <p class="muted">输入你的新 INGEST_TOKEN 后，点击生成。然后把蓝色按钮拖到 Chrome 书签栏。</p>
+  <p class="warn">注意：生成后的书签里会包含 INGEST_TOKEN。只在你自己的 Chrome 里保存，不要截图外发。</p>
+
+  <label>Worker 地址</label>
+  <input id="base" value="https://knowledge-space-worker.dj-knowledge.workers.dev" />
+
+  <label>INGEST_TOKEN</label>
+  <input id="token" type="password" placeholder="kb_xxxxxxxxxxxxxxxxx" />
+
+  <button onclick="generate()">生成书签</button>
+  <p id="dragHint" class="muted" style="display:none;">把下面这个蓝色按钮拖到 Chrome 书签栏：</p>
+  <p><a id="bookmarklet" class="bookmarklet" style="display:none;" href="#">收录到知识库</a></p>
+
+  <label>Bookmarklet 源码（备用：复制后新建书签，粘贴到 URL）</label>
+  <textarea id="out" readonly></textarea>
+
+  <h2>使用方法</h2>
+  <ol class="muted">
+    <li>打开任意网页。</li>
+    <li>可选：选中你认为重要的一段文字。</li>
+    <li>点击书签栏里的 <code>收录到知识库</code>。</li>
+    <li>看到“已收录”弹窗后，到 Notion Knowledge Items 查看。</li>
+  </ol>
+
+<script>
+function generate() {
+  const base = document.getElementById('base').value.replace(/\/$/, '');
+  const token = document.getElementById('token').value.trim();
+  if (!token) { alert('请先输入 INGEST_TOKEN'); return; }
+  const code = `javascript:(async()=>{const u=${JSON.stringify(base + '/ingest')};const token=${JSON.stringify(token)};const payload={source_url:location.href,title:document.title,text:String(window.getSelection&&window.getSelection()||''),source_platform:'auto',capture_device:'chrome',privacy:'personal'};try{const r=await fetch(u,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();alert(j.ok?'已收录：'+j.title+'\\n'+(j.summary||''):'收录失败：'+(j.error||JSON.stringify(j)));}catch(e){alert('收录失败：'+e.message)}})();`;
+  document.getElementById('out').value = code;
+  const a = document.getElementById('bookmarklet');
+  a.href = code;
+  a.style.display = 'inline-block';
+  document.getElementById('dragHint').style.display = 'block';
+}
+</script>
+</body>
+</html>
