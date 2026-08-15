@@ -11,31 +11,6 @@ async function getCurrentTab() {
   return tab;
 }
 
-// 🆕 拉待处理队列 pending 数，显示到按钮徽章
-async function updateQueueBadge() {
-  try {
-    const cfg = await chrome.storage.sync.get(["workerBaseUrl", "ingestToken"]);
-    if (!cfg.workerBaseUrl || !cfg.ingestToken) return;
-    const base = String(cfg.workerBaseUrl).replace(/\/ingest\/?$/, "").replace(/\/$/, "");
-    const resp = await fetch(`${base}/api/queue?token=${encodeURIComponent(cfg.ingestToken)}&limit=1&status=pending`);
-    if (!resp.ok) return;
-    const data = await resp.json();
-    if (!data.ok) return;
-    const pending = (data.stats || []).find(s => s.status === "pending")?.cnt || 0;
-    const badge = document.querySelector("#pendingBadge");
-    if (badge) {
-      if (pending > 0) {
-        badge.textContent = pending;
-        badge.classList.add("show");
-      } else {
-        badge.classList.remove("show");
-      }
-    }
-  } catch (e) {
-    console.log("[queue badge] 拉失败（可忽略）:", e.message);
-  }
-}
-
 // DOM加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
   console.log("✅ DOM加载完成");
@@ -61,20 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // 🆕 绑定「待处理队列」按钮：打开监控台的队列 tab
-  const openQueueBtn = document.querySelector("#openQueue");
+  // 绑定「监控台」按钮
   const openAdminBtn = document.querySelector("#openAdmin");
-  if (openQueueBtn) {
-    openQueueBtn.addEventListener("click", async () => {
-      const cfg = await chrome.storage.sync.get(["workerBaseUrl", "ingestToken"]);
-      if (!cfg.workerBaseUrl || !cfg.ingestToken) {
-        alert("请先在插件设置里填写 Worker URL 和 INGEST_TOKEN");
-        return;
-      }
-      const base = String(cfg.workerBaseUrl).replace(/\/ingest\/?$/, "").replace(/\/$/, "");
-      chrome.tabs.create({ url: `${base}/admin?token=${encodeURIComponent(cfg.ingestToken)}#queue` });
-    });
-  }
   if (openAdminBtn) {
     openAdminBtn.addEventListener("click", async () => {
       const cfg = await chrome.storage.sync.get(["workerBaseUrl", "ingestToken"]);
@@ -86,9 +49,6 @@ document.addEventListener('DOMContentLoaded', function() {
       chrome.tabs.create({ url: `${base}/admin?token=${encodeURIComponent(cfg.ingestToken)}` });
     });
   }
-
-  // 🆕 拉队列 pending 数：显示徽章
-  updateQueueBadge();
   
   console.log("✅ popup.js 初始化完成");
 });
@@ -455,8 +415,8 @@ async function handleSave() {
     console.log("📥 background返回（任务已入队）:", result);
     
     if (result?.ok && result?.queued) {
-      // ✅ 已入队：立刻告诉用户后台在处理，Popup变成非阻塞状态
-      statusEl.innerHTML = '<span class="ok">✅ 已提交后台处理，完成后系统通知</span>';
+      // ✅ 已提交给 background，background 会等 Worker 同步处理完后弹系统通知
+      statusEl.innerHTML = '<span class="ok">⏳ 正在收录中，完成后弹系统通知…</span>';
       // 不再setTimeout自动关闭，让用户自然点走或忽略
       // Popup切到别处或点别处会自然消失，不切也不影响background
     } else {

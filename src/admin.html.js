@@ -56,10 +56,8 @@ export const ADMIN_HTML = `<!DOCTYPE html>
       <!-- View 切换 -->
       <div class="flex gap-1 ml-4">
         <button @click="view='logs'; refresh()" :class="view==='logs'?'active':''" class="tab-btn">📋 收录日志</button>
-        <button @click="view='queue'; refresh()" :class="view==='queue'?'active':''" class="tab-btn">
-          ⏳ 待处理队列
-          <span x-show="queuePendingCount > 0" x-text="'(' + queuePendingCount + ')'" class="ml-1 text-red-400 font-semibold"></span>
-        </button>
+        <button @click="view='test'; loadPrompts()" :class="view==='test'?'active':''" class="tab-btn">🧪 测试</button>
+        <button @click="view='config'; loadConfig()" :class="view==='config'?'active':''" class="tab-btn">⚙️ 配置部署</button>
       </div>
 
       <div class="flex-1"></div>
@@ -92,6 +90,9 @@ export const ADMIN_HTML = `<!DOCTYPE html>
       <button @click="refresh()" class="px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
         <span x-show="!loading">刷新</span>
         <span x-show="loading">…</span>
+      </button>
+      <button @click="clearLogs()" class="px-3 py-1.5 rounded-md bg-red-600/80 hover:bg-red-500 text-white text-sm font-medium transition">
+        🗑 清空日志
       </button>
     </div>
     <!-- 统计条 -->
@@ -140,7 +141,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <p class="text-sm truncate" x-text="log.title || log.source_url"></p>
               <p class="text-xs text-gray-500 truncate" x-text="log.source_url"></p>
             </div>
-            <span x-show="log.jina_status" class="text-xs text-gray-500 shrink-0 hidden md:block" x-text="'Jina: ' + (log.jina_text_length || 0) + '字'"></span>
+            <span x-show="log.jina_status" class="text-xs text-gray-500 shrink-0 hidden md:block" x-text="'正文: ' + (log.jina_text_length || 0) + '字'"></span>
             <span class="text-xs text-gray-500 shrink-0" x-text="fmtTime(log.created_at)"></span>
             <span class="text-gray-500 text-xs" x-text="expanded[log.id] ? '▼' : '▶'"></span>
           </div>
@@ -149,7 +150,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div><span class="text-gray-500">Request ID</span><br><span class="font-mono" x-text="log.request_id"></span></div>
               <div><span class="text-gray-500">耗时</span><br><span x-text="log.duration_ms + ' ms'"></span></div>
-              <div><span class="text-gray-500">Jina</span><br><span x-text="log.jina_status || '未触发'"></span></div>
+              <div><span class="text-gray-500">抓取</span><br><span x-text="log.jina_status || '未触发'"></span></div>
               <div><span class="text-gray-500">Notion</span><br>
                 <a x-show="log.notion_page_url" :href="log.notion_page_url" target="_blank" class="text-indigo-400 hover:underline" x-text="log.notion_status || '—'"></a>
                 <span x-show="!log.notion_page_url" x-text="log.notion_status || '—'"></span>
@@ -157,7 +158,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             </div>
 
             <div x-show="log.status === 'blocked'" class="p-3 rounded bg-red-950 border border-red-900 text-red-300 text-xs">
-              🚫 <b>命中登录墙/验证页</b>：Jina Reader 抓到的是拦截页而非正文。iOS 场景已自动入队"待处理队列"，回桌面 Chrome 一键消费。
+              🚫 <b>命中登录墙/验证页</b>：抓取到的是拦截页而非正文。
             </div>
             <div x-show="log.status === 'recovered'" class="p-3 rounded bg-cyan-950 border border-cyan-900 text-cyan-300 text-xs">
               🔵 <b>Wayback Machine 救回</b>：原页面被拦截，从 archive.org 历史快照拿到了正文。
@@ -166,7 +167,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <b>❌ 错误：</b><span x-text="log.error"></span>
             </div>
             <div x-show="log.coze_error" class="p-3 rounded bg-orange-950 border border-orange-900 text-orange-300 text-xs">
-              <b>⚠️ Coze错误：</b><span x-text="log.coze_error"></span>
+              <b>⚠️ AI分析错误：</b><span x-text="log.coze_error"></span>
             </div>
             <div x-show="log.notion_error" class="p-3 rounded bg-yellow-950 border border-yellow-900 text-yellow-300 text-xs">
               <b>⚠️ Notion错误：</b><span x-text="log.notion_error"></span>
@@ -175,8 +176,8 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <div>
               <div class="flex gap-1 mb-2 border-b border-gray-800 flex-wrap">
                 <button @click="tabs[log.id]='raw'" :class="tabs[log.id]==='raw'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">收到 payload</button>
-                <button @click="tabs[log.id]='coze_in'" :class="tabs[log.id]==='coze_in'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">送 Coze 的字段 ⭐</button>
-                <button @click="tabs[log.id]='coze_out'" :class="tabs[log.id]==='coze_out'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">Coze 返回</button>
+                <button @click="tabs[log.id]='coze_in'" :class="tabs[log.id]==='coze_in'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">送 AI 的字段 ⭐</button>
+                <button @click="tabs[log.id]='coze_out'" :class="tabs[log.id]==='coze_out'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">AI 返回</button>
               </div>
 
               <div x-show="!tabs[log.id] || tabs[log.id]==='raw'">
@@ -191,7 +192,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             </div>
 
             <div class="flex gap-2 text-xs">
-              <button @click="copyJson(log.coze_input)" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">复制 Coze 输入</button>
+              <button @click="copyJson(log.coze_input)" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">复制 AI 输入</button>
               <a x-show="log.source_url" :href="log.source_url" target="_blank" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">🔗 打开原文</a>
               <a x-show="log.notion_page_url" :href="log.notion_page_url" target="_blank" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-indigo-400">→ 打开 Notion</a>
             </div>
@@ -201,45 +202,633 @@ export const ADMIN_HTML = `<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- 主内容：队列 View -->
-  <div x-show="view==='queue'" class="max-w-7xl mx-auto px-6 py-6">
-    <div class="mb-4 p-4 rounded-lg bg-indigo-950 border border-indigo-900 text-sm text-indigo-200">
-      <p class="font-medium mb-1">📱 待处理队列说明</p>
-      <p class="text-xs text-indigo-300">手机端（iOS 快捷指令）遇到登录墙/反爬时，Worker 会自动把 URL 入队。回桌面后打开对应 URL，用 Chrome 插件一键收录即可完成入库。</p>
-    </div>
+  <!-- 主内容：测试 View -->
+  <div x-show="view==='test'" class="max-w-4xl mx-auto px-6 py-6 space-y-6">
 
-    <div x-show="!queue.length && !loading" class="text-center text-gray-500 py-16">
-      <p class="text-sm">队列为空 ✓</p>
-    </div>
+    <!-- Part 1: 内容提取测试 -->
+    <div class="card rounded-lg p-6 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold mb-2">🔍 内容提取测试</h2>
+        <p class="text-sm text-gray-500">粘贴链接，选择抓取方式，测试 TikHub / Firecrawl 能否成功提取正文。</p>
+      </div>
 
-    <div class="space-y-2">
-      <template x-for="q in queue" :key="q.id">
-        <div class="card rounded-lg p-4">
-          <div class="flex items-start gap-3">
-            <span class="px-2 py-0.5 rounded text-xs font-medium shrink-0 mt-0.5" :class="{
-              'badge-blocked': q.reason && q.reason.startsWith('blocked'),
-              'badge-error': q.reason === 'jina_error',
-              'badge-neutral': !q.reason || (!q.reason.startsWith('blocked') && q.reason !== 'jina_error')
-            }" x-text="reasonLabel(q.reason)"></span>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium truncate" x-text="q.title || '(无标题)'"></p>
-              <a :href="q.source_url" target="_blank" class="text-xs text-indigo-400 hover:underline break-all" x-text="q.source_url"></a>
-              <p class="text-xs text-gray-500 mt-1">
-                <span x-text="deviceLabel(q.capture_device)"></span> · <span x-text="fmtTime(q.created_at)"></span>
-              </p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">链接 URL</label>
+          <textarea
+            x-model="testUrl"
+            placeholder="https://www.zhihu.com/pin/2061030932392546866"
+            class="w-full h-20 px-3 py-2 rounded-md bg-gray-900 border border-gray-700 focus:border-indigo-500 focus:outline-none text-sm placeholder-gray-500"
+          ></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">抓取方式</label>
+          <select
+            x-model="testFetcher"
+            class="w-full px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-sm focus:outline-none focus:border-indigo-500"
+          >
+            <option value="auto">自动（按代码优先级）</option>
+            <option value="tikhub">强制 TikHub</option>
+            <option value="tikhub_ocr">强制 TikHub + OCR（小红书）</option>
+            <option value="firecrawl">强制 Firecrawl</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            • 自动：按代码默认优先级（TikHub -> Firecrawl）<br>
+            • 强制：跳过优先级，直接使用选中的方式<br>
+            • TikHub + OCR：TikHub 提取后强制对图片做火山 OCR（小红书专用）
+          </p>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            @click="runTest()"
+            :disabled="testLoading"
+            class="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white text-sm font-medium transition"
+          >
+            <span x-show="!testLoading">▶️ 开始测试</span>
+            <span x-show="testLoading">⏳ 测试中…</span>
+          </button>
+          <button
+            @click="clearTest()"
+            :disabled="testLoading"
+            class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-gray-200 text-sm font-medium transition"
+          >
+            清空结果
+          </button>
+        </div>
+      </div>
+
+      <template x-if="testResult">
+        <div class="border-t border-gray-800 pt-6 space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div><span class="text-gray-500">耗时</span><br><span x-text="(testResult.duration_ms || 0) + ' ms'" class="font-mono"></span></div>
+            <div><span class="text-gray-500">抓取器</span><br><span x-text="testResult._fetcher || '—'" class="font-mono"></span></div>
+            <div><span class="text-gray-500">正文长度</span><br><span x-text="(testResult.text || '').length + ' 字符'" class="font-mono"></span></div>
+            <div><span class="text-gray-500">状态</span><br><span x-text="testResult._jina_status || '—'" class="font-mono"></span></div>
+          </div>
+
+          <div>
+            <div class="flex gap-1 mb-2 border-b border-gray-800 flex-wrap items-center">
+              <button @click="testTab='md'" :class="testTab==='md'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">Markdown 预览</button>
+              <button @click="testTab='raw'" :class="testTab==='raw'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">原始结果</button>
+              <button @click="testTab='item'" :class="testTab==='item'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">解析后字段</button>
+              <div class="flex-1"></div>
+              <div x-show="testTab==='md' && testResult.text" class="flex gap-2 mb-1">
+                <button @click="copyMarkdown()" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs">📋 复制 Markdown</button>
+                <button @click="downloadMarkdown()" class="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">⬇️ 下载 .md</button>
+              </div>
             </div>
-            <div class="flex gap-2 shrink-0">
-              <button @click="copyUrl(q.source_url)" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs">复制 URL</button>
-              <a :href="q.source_url" target="_blank" class="px-2.5 py-1 rounded bg-indigo-800 hover:bg-indigo-700 text-white text-xs">🌐 打开去收录</a>
-              <button @click="markConsumed(q.id)" class="px-2.5 py-1 rounded bg-green-800 hover:bg-green-700 text-white text-xs">✓ 已收录</button>
-              <button @click="abandonItem(q.id)" class="px-2.5 py-1 rounded bg-gray-800 hover:bg-red-800 text-gray-400 hover:text-white text-xs">✗ 放弃</button>
-            </div>
+            <div x-show="testTab==='md'" class="code-block whitespace-pre-wrap" x-text="testResult.text || '(无内容)'"></div>
+            <div x-show="testTab==='raw'" class="code-block" x-text="pretty(testResult)"></div>
+            <div x-show="testTab==='item'" class="code-block" x-text="pretty({ title: testResult.title, author: testResult.author, published_at: testResult.published_at, source_url: testResult.source_url, text_length: (testResult.text || '').length, summary: testResult.summary, key_points: testResult.key_points, _fetcher: testResult._fetcher, _jina_status: testResult._jina_status, _quality: testResult._quality })"></div>
           </div>
         </div>
       </template>
     </div>
 
-    <div x-show="loading" class="text-center text-gray-500 py-8"><p class="text-sm animate-pulse">加载中…</p></div>
+    <!-- Part 2: AI 分析测试 -->
+    <div class="card rounded-lg p-6 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold mb-2">🤖 AI 分析测试</h2>
+        <p class="text-sm text-gray-500">填入测试内容，用当前保存的提示词调 AI 模型，查看摘要/分类/标签的生成效果。</p>
+      </div>
+
+      <!-- 提示词跳转（配置在「配置部署」里改） -->
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-medium text-gray-300">🎨 提示词</h3>
+        <a href="#" @click.prevent="view='config'; loadConfig()" class="text-xs text-blue-400 hover:underline">去配置页修改 -></a>
+      </div>
+
+      <!-- 测试输入 -->
+      <div class="border-t border-gray-800 pt-4 space-y-3">
+        <h3 class="text-sm font-medium text-gray-300">🧪 测试输入</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">标题</label>
+            <input x-model="promptTest.title" placeholder="测试标题" class="w-full px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-sm focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">来源平台</label>
+            <input x-model="promptTest.source_platform" placeholder="如：知乎" class="w-full px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-sm focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">操作</label>
+            <button @click="testPrompt()" :disabled="promptTesting" class="w-full px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white text-sm font-medium transition">
+              <span x-show="!promptTesting">▶️ 测试</span>
+              <span x-show="promptTesting">⏳ 调用中…</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">测试正文</label>
+          <textarea x-model="promptTest.text" placeholder="粘贴测试用的正文内容…" class="w-full h-32 px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-sm focus:outline-none focus:border-indigo-500 resize-y"></textarea>
+        </div>
+      </div>
+
+      <!-- 测试结果 -->
+      <template x-if="promptTestResult">
+        <div class="border-t border-gray-800 pt-4 space-y-3">
+          <div class="flex gap-1 border-b border-gray-800">
+            <button @click="promptTestTab='parsed'" :class="promptTestTab==='parsed'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">AI 返回（解析后）</button>
+            <button @click="promptTestTab='raw'" :class="promptTestTab==='raw'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">原始返回</button>
+            <button @click="promptTestTab='usage'" :class="promptTestTab==='usage'?'text-indigo-400 border-indigo-400':'text-gray-500 border-transparent'" class="px-3 py-1.5 text-xs border-b-2 transition">耗时 & Token</button>
+          </div>
+          <div x-show="promptTestTab==='parsed'" class="code-block" x-text="pretty(promptTestResult.parsed)"></div>
+          <div x-show="promptTestTab==='raw'" class="code-block" x-text="promptTestResult.raw_content || '(空)'"></div>
+          <div x-show="promptTestTab==='usage'" class="grid grid-cols-3 gap-3 text-xs">
+            <div><span class="text-gray-500">耗时</span><br><b x-text="promptTestResult.duration_ms + ' ms'"></b></div>
+            <div><span class="text-gray-500">模型</span><br><b x-text="promptTestResult.model || '-'"></b></div>
+            <div><span class="text-gray-500">Token</span><br><b x-text="JSON.stringify(promptTestResult.usage || {})"></b></div>
+          </div>
+        </div>
+      </template>
+
+      <div x-show="promptTestError" class="p-3 rounded-md bg-red-950 border border-red-900 text-red-300 text-sm">
+        ❌ <span x-text="promptTestError"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主内容：配置部署 View -->
+  <div x-show="view==='config'" class="max-w-4xl mx-auto px-6 py-6">
+    <div class="mb-6">
+      <h2 class="text-lg font-semibold mb-1">⚙️ 配置部署</h2>
+      <p class="text-sm text-gray-500">按步骤完成部署，每步配置好后点保存即可生效。</p>
+    </div>
+
+    <!-- 生产数据流示意图 -->
+    <div class="mb-6 rounded-xl p-4" style="background: #12121f; border: 1px solid #2a2a4a;">
+      <div class="text-xs text-gray-500 mb-4 text-center">📋 收录数据流：用户发送一条链接后，系统内部的完整处理过程</div>
+
+      <div class="flex items-stretch gap-2">
+
+        <!-- 左侧：用户发送（分叉） -->
+        <div class="flex flex-col gap-2 justify-center min-w-[120px]">
+          <div class="flex items-center gap-2 rounded-lg p-1.5" style="background:#1a1a2e;border:1px solid #2a2a4a;">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0" style="background:#1e2a3a;border:1px solid #2d4a6a;">💻</div>
+            <div class="text-[10px] leading-tight">
+              <div class="text-gray-300 font-medium">电脑端发送</div>
+              <div class="text-gray-600">Chrome 插件</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 rounded-lg p-1.5" style="background:#1a1a2e;border:1px solid #2a2a4a;">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0" style="background:#1e2a3a;border:1px solid #2d4a6a;">📱</div>
+            <div class="text-[10px] leading-tight">
+              <div class="text-gray-300 font-medium">手机端发送</div>
+              <div class="text-gray-600">iOS 快捷指令</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 箭头：url -->
+        <div class="flex flex-col items-center justify-center min-w-[50px]">
+          <div class="text-[10px] text-indigo-400 font-mono mb-0.5">url</div>
+          <div class="text-gray-600 text-lg">→</div>
+        </div>
+
+        <!-- 中间：Worker 大框 -->
+        <div class="flex-1 rounded-lg p-3" style="background: #0d0d18; border: 1px solid #2a2a4a;">
+          <div class="text-[10px] text-gray-500 mb-2 text-center">☁️ Cloudflare Worker</div>
+          <div class="flex items-center justify-between gap-1">
+            <!-- 内容提取 -->
+            <div class="flex flex-col items-center min-w-0 flex-1">
+              <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm" style="background:#2a2a1e;border:1px solid #5a5a2d;">🔍</div>
+              <div class="text-xs text-gray-300 mt-1 text-center font-medium leading-tight">内容提取</div>
+              <div class="text-[10px] text-gray-600 mt-0.5 text-center leading-tight">优先TikHub<br>其次Firecrawl<br>小红书补充OCR</div>
+            </div>
+            <!-- 箭头：title + content -->
+            <div class="flex flex-col items-center justify-center min-w-[50px]">
+              <div class="text-[10px] text-indigo-400 font-mono leading-tight text-center">title<br>content</div>
+              <div class="text-gray-600 text-sm">→</div>
+            </div>
+            <!-- AI 分析 -->
+            <div class="flex flex-col items-center min-w-0 flex-1">
+              <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm" style="background:#2a1e3a;border:1px solid #4a3a6a;">🤖</div>
+              <div class="text-xs text-gray-300 mt-1 text-center font-medium leading-tight">AI 分析</div>
+              <div class="text-[10px] text-gray-600 mt-0.5 text-center leading-tight">摘要+分类<br>+标签</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 箭头：summary + category + tags -->
+        <div class="flex flex-col items-center justify-center min-w-[50px]">
+          <div class="text-[10px] text-indigo-400 font-mono leading-tight text-center">summary<br>category<br>tags</div>
+          <div class="text-gray-600 text-lg">→</div>
+        </div>
+
+        <!-- 写入 Notion -->
+        <div class="flex flex-col items-center justify-center min-w-[80px]">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-base" style="background:#1e2a2a;border:1px solid #2d5a5a;">📝</div>
+          <div class="text-xs text-gray-300 mt-1.5 text-center font-medium">写入知识库</div>
+          <div class="text-[10px] text-gray-600 mt-0.5 text-center leading-tight">Notion<br>数据库</div>
+        </div>
+
+        <!-- 箭头：异步通知 -->
+        <div class="flex flex-col items-center justify-center min-w-[50px]">
+          <div class="text-[10px] text-indigo-400 font-mono mb-0.5">异步通知</div>
+          <div class="text-gray-600 text-lg">→</div>
+        </div>
+
+        <!-- 右侧：通知分叉 -->
+        <div class="flex flex-col gap-2 justify-center min-w-[120px]">
+          <!-- 电脑端通知 -->
+          <div class="flex items-center gap-2 rounded-lg p-1.5" style="background:#1a1a2e;border:1px solid #2a2a4a;">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0" style="background:#1e2a3a;border:1px solid #2d4a6a;">💻</div>
+            <div class="text-[10px] leading-tight">
+              <div class="text-gray-300 font-medium">电脑端通知</div>
+              <div class="text-gray-600">Chrome插件弹窗</div>
+            </div>
+          </div>
+          <!-- 手机端通知 -->
+          <div class="flex items-center gap-2 rounded-lg p-1.5" style="background:#1a1a2e;border:1px solid #2a2a4a;">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0" style="background:#2a2a1e;border:1px solid #5a5a2d;">🔔</div>
+            <div class="text-[10px] leading-tight">
+              <div class="text-gray-300 font-medium">手机端通知</div>
+              <div class="text-gray-600">手机端Bark推送</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Step 1: 内容提取 -->
+    <div id="step-1" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#2a2a1e;border:1px solid #5a5a2d;color:#aaa66a;">1</span>
+        <h3 class="text-sm font-semibold text-gray-200">配置内容提取</h3>
+        <span class="text-xs text-gray-600">TikHub 优先 → Firecrawl 兜底 → 小红书额外 OCR</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-3 mb-4">
+        <p class="text-xs text-gray-400">收录一条链接时，系统需要把网页正文抓取下来，这一步配置 3 个内容提取服务。点击下方卡片填入 API Key 即可。</p>
+        <div class="text-xs text-gray-500 space-y-1.5">
+          <p>🔹 <b class="text-gray-300">TikHub</b>：知乎、小红书、B站、微信公众号等平台的正文提取，<b class="text-gray-300">必须配置</b>。在 tikhub.io 注册账号即可获取 Key。</p>
+          <p>🔹 <b class="text-gray-300">Firecrawl</b>：通用网页正文提取，支持的页面不全、效果一般，仅做兜底。在 firecrawl.dev 注册获取。</p>
+          <p>🔹 <b class="text-gray-300">火山引擎 OCR</b>：小红书图片文字识别，想抓小红书图文信息才需要配。在火山引擎控制台创建 Access Key。</p>
+        </div>
+        <div class="rounded-md p-2.5" style="background: rgba(106,154,218,0.1); border: 1px solid rgba(106,154,218,0.3);">
+          <p class="text-xs text-indigo-300">💡 三个都配效果最好。至少要配置 TikHub（Firecrawl 支持的抓取页面不全、效果不好，仅做兜底），否则无法抓取网页正文。另外如果期望抓取小红书上的图文信息，就必须配置 OCR 能力。</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="(ch, ci) in configChannels.filter(c => c.section === 'extract')" :key="ch.id">
+          <div @click="openConfigModal(configChannels.indexOf(ch))" class="cursor-pointer rounded-xl p-4 border transition group hover:border-indigo-500" :class="ch.allConfigured ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-900/30 border-gray-800 hover:border-indigo-500'">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" x-text="ch.icon"></span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-100" x-text="ch.title"></div>
+                  <div class="text-xs text-gray-500" x-text="ch.purpose"></div>
+                </div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" :class="ch.allConfigured ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'" x-text="ch.allConfigured ? '已配置' : '未配置'"></span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <template x-for="key in ch.keys" :key="key.name">
+                <span class="text-xs px-1.5 py-0.5 rounded" :class="key.configured ? 'bg-green-900/30 text-green-400/80' : 'bg-gray-800 text-gray-500'" x-text="key.short"></span>
+              </template>
+            </div>
+            <div class="mt-3 flex justify-end" @click.stop>
+              <button @click="testChannel(configChannels.indexOf(ch))" :disabled="ch.testing" class="text-xs px-2.5 py-1 rounded-md transition" :class="ch.testing ? 'bg-gray-700 text-gray-400' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'">
+                <span x-show="!ch.testing">🔌 测试连通</span>
+                <span x-show="ch.testing">⏳ 测试中…</span>
+              </button>
+            </div>
+            <div x-show="ch.testMsg" x-transition class="mt-2 text-xs" :class="ch.testOk ? 'text-green-400' : 'text-red-400'" x-text="ch.testMsg"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Step 2: AI 分析 -->
+    <div id="step-2" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#2a1e3a;border:1px solid #4a3a6a;color:#a87ada;">2</span>
+        <h3 class="text-sm font-semibold text-gray-200">配置 AI 分析</h3>
+        <span class="text-xs text-gray-600">摘要 / 分类 / 标签，含提示词配置</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-3 mb-4">
+        <p class="text-xs text-gray-400">配置一个大模型，收录内容后自动生成摘要、分类和标签，方便日后检索。</p>
+        <div class="text-xs text-gray-500 space-y-1.5">
+          <p>🔹 支持所有 OpenAI 兼容接口的大模型：DeepSeek、OpenAI、通义千问、豆包、智谱等都可以。</p>
+          <p>🔹 点击下方卡片，在弹窗里填入三项：API Key、Base URL、模型名。Base URL 填你的大模型接口地址（填域名即可，自动补 /chat/completions）。</p>
+          <p>🔹 提示词是可选的，系统有默认值。你也可以在弹窗里自定义提示词。</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="(ch, ci) in configChannels.filter(c => c.section === 'ai')" :key="ch.id">
+          <div @click="openConfigModal(configChannels.indexOf(ch))" class="cursor-pointer rounded-xl p-4 border transition group hover:border-indigo-500" :class="ch.allConfigured ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-900/30 border-gray-800 hover:border-indigo-500'">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" x-text="ch.icon"></span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-100" x-text="ch.title"></div>
+                  <div class="text-xs text-gray-500" x-text="ch.purpose"></div>
+                </div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" :class="ch.allConfigured ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'" x-text="ch.allConfigured ? '已配置' : '未配置'"></span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <template x-for="key in ch.keys" :key="key.name">
+                <span class="text-xs px-1.5 py-0.5 rounded" :class="key.configured ? 'bg-green-900/30 text-green-400/80' : 'bg-gray-800 text-gray-500'" x-text="key.short"></span>
+              </template>
+            </div>
+            <div class="mt-3 flex justify-end" @click.stop>
+              <button @click="testChannel(configChannels.indexOf(ch))" :disabled="ch.testing" class="text-xs px-2.5 py-1 rounded-md transition" :class="ch.testing ? 'bg-gray-700 text-gray-400' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'">
+                <span x-show="!ch.testing">🔌 测试连通</span>
+                <span x-show="ch.testing">⏳ 测试中…</span>
+              </button>
+            </div>
+            <div x-show="ch.testMsg" x-transition class="mt-2 text-xs" :class="ch.testOk ? 'text-green-400' : 'text-red-400'" x-text="ch.testMsg"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Step 3: 写入知识库 -->
+    <div id="step-3" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#1e2a2a;border:1px solid #2d5a5a;color:#6aaaaa;">3</span>
+        <h3 class="text-sm font-semibold text-gray-200">配置知识库写入</h3>
+        <span class="text-xs text-gray-600">收录的内容写入 Notion 数据库</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-3 mb-4">
+        <p class="text-xs text-gray-400">收录的内容最终会写入 Notion 数据库。需要先在 Notion 里做好准备，拿到 Token 和数据库 ID，再填到下方卡片里。</p>
+        <div class="text-xs text-gray-500 space-y-1.5">
+          <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">notion.so/profile/integrations</code>，创建一个内部集成，获取 Token。</p>
+          <p>② 在 Notion 新建一个数据库（表格视图），需要添加以下属性（列）：</p>
+          <div class="ml-3 space-y-0.5 text-gray-400">
+            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Title</code>（标题类型）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Summary</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Category</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Tags</code>（多选）</p>
+            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source URL</code>（URL）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source Platform</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Key Points</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Author</code>（文本）</p>
+            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Importance</code>（数字）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Confidence</code>（单选）</p>
+          </div>
+          <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。如需修改字段，在提示词中改输出字段，然后在 Notion 中对应修改列名，总之两边保持一致即可。</p>
+          <p>③ 把数据库分享给刚才创建的集成：点数据库右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> Connections -> 添加你创建的集成。</p>
+          <p>④ 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是。例如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">notion.so/你的工作区/DATABASE_ID?v=...</code>，取 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 前面的那串。</p>
+        </div>
+        <div class="rounded-md p-2.5" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);">
+          <p class="text-xs text-yellow-400">⚠️ 第③步一定要做，否则集成没有权限写入数据库。</p>
+        </div>
+        <p class="text-xs text-gray-400 pt-1">准备好后，点击下方卡片填入 Notion Token 和数据库 ID。</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="(ch, ci) in configChannels.filter(c => c.section === 'store')" :key="ch.id">
+          <div @click="openConfigModal(configChannels.indexOf(ch))" class="cursor-pointer rounded-xl p-4 border transition group hover:border-indigo-500" :class="ch.allConfigured ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-900/30 border-gray-800 hover:border-indigo-500'">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" x-text="ch.icon"></span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-100" x-text="ch.title"></div>
+                  <div class="text-xs text-gray-500" x-text="ch.purpose"></div>
+                </div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" :class="ch.allConfigured ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'" x-text="ch.allConfigured ? '已配置' : '未配置'"></span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <template x-for="key in ch.keys" :key="key.name">
+                <span class="text-xs px-1.5 py-0.5 rounded" :class="key.configured ? 'bg-green-900/30 text-green-400/80' : 'bg-gray-800 text-gray-500'" x-text="key.short"></span>
+              </template>
+            </div>
+            <div class="mt-3 flex justify-end" @click.stop>
+              <button @click="testChannel(configChannels.indexOf(ch))" :disabled="ch.testing" class="text-xs px-2.5 py-1 rounded-md transition" :class="ch.testing ? 'bg-gray-700 text-gray-400' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'">
+                <span x-show="!ch.testing">🔌 测试连通</span>
+                <span x-show="ch.testing">⏳ 测试中…</span>
+              </button>
+            </div>
+            <div x-show="ch.testMsg" x-transition class="mt-2 text-xs" :class="ch.testOk ? 'text-green-400' : 'text-red-400'" x-text="ch.testMsg"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Step 4: 推送通知 -->
+    <div id="step-4" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#2a2a1e;border:1px solid #5a5a2d;color:#aaa66a;">4</span>
+        <h3 class="text-sm font-semibold text-gray-200">配置推送通知</h3>
+        <span class="text-xs text-gray-600">收录完成后推送到手机</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-3 mb-4">
+        <p class="text-xs text-gray-400">收录完成后可以给你的手机发推送通知。仅手机端需要配置，电脑端 Chrome 插件自带通知不需要配。</p>
+        <div class="text-xs text-gray-500 space-y-1.5">
+          <p>🔹 <b class="text-gray-300">Bark</b> 是一个免费的 iOS 推送 App，收录完成后手机会收到通知。</p>
+          <p>① 在 App Store 搜索并安装 Bark。</p>
+          <p>② 打开 Bark，首页会显示你的 Key（一串字符）。</p>
+        </div>
+        <p class="text-xs text-gray-400 pt-1">点击下方卡片填入 Bark Key 即可。</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="(ch, ci) in configChannels.filter(c => c.section === 'notify')" :key="ch.id">
+          <div @click="openConfigModal(configChannels.indexOf(ch))" class="cursor-pointer rounded-xl p-4 border transition group hover:border-indigo-500" :class="ch.allConfigured ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-900/30 border-gray-800 hover:border-indigo-500'">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" x-text="ch.icon"></span>
+                <div>
+                  <div class="text-sm font-semibold text-gray-100" x-text="ch.title"></div>
+                  <div class="text-xs text-gray-500" x-text="ch.purpose"></div>
+                </div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap" :class="ch.allConfigured ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'" x-text="ch.allConfigured ? '已配置' : '未配置'"></span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <template x-for="key in ch.keys" :key="key.name">
+                <span class="text-xs px-1.5 py-0.5 rounded" :class="key.configured ? 'bg-green-900/30 text-green-400/80' : 'bg-gray-800 text-gray-500'" x-text="key.short"></span>
+              </template>
+            </div>
+            <div class="mt-3 flex justify-end" @click.stop>
+              <button @click="testChannel(configChannels.indexOf(ch))" :disabled="ch.testing" class="text-xs px-2.5 py-1 rounded-md transition" :class="ch.testing ? 'bg-gray-700 text-gray-400' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'">
+                <span x-show="!ch.testing">🔌 测试连通</span>
+                <span x-show="ch.testing">⏳ 测试中…</span>
+              </button>
+            </div>
+            <div x-show="ch.testMsg" x-transition class="mt-2 text-xs" :class="ch.testOk ? 'text-green-400' : 'text-red-400'" x-text="ch.testMsg"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Step 5: 安装客户端 -->
+    <div id="step-5" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#1e2a3a;border:1px solid #2d4a6a;color:#6a9ada;">5</span>
+        <h3 class="text-sm font-semibold text-gray-200">安装客户端</h3>
+        <span class="text-xs text-gray-600">配置好后，在手机和电脑上安装收录入口</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-4">
+        <div>
+          <h3 class="text-sm font-medium text-gray-300 mb-2">📱 iOS 快捷指令</h3>
+          <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
+          <div class="text-xs text-gray-500 space-y-1.5">
+            <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
+            <p>② 添加操作「获取剪贴板」。</p>
+            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code></p>
+            <p>④ 添加操作「获取 URL 内容」，把方法改为 POST。</p>
+            <p>⑤ 展开请求头，添加两个请求头：</p>
+            <div class="ml-3 space-y-0.5 text-gray-400">
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer &lt;你的令牌&gt;</code></p>
+            </div>
+            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
+            <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
+          </div>
+        </div>
+        <div class="border-t border-gray-800 pt-3">
+          <h3 class="text-sm font-medium text-gray-300 mb-2">🌐 Chrome 插件</h3>
+          <p class="text-xs text-gray-500 mb-2">插件代码在项目的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
+          <div class="text-xs text-gray-500 space-y-1.5">
+            <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
+            <p>② 点「加载已解压的扩展程序」，选中项目里的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
+            <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 Token，保存。</p>
+          </div>
+          <div class="mt-2 rounded-md p-2.5" style="background: #2a2a1e; border: 1px solid #5a5a2d;">
+            <p class="text-xs text-yellow-400/80">🔔 <b>开启通知权限</b>：收录完成后插件会弹系统通知提醒你，需在 macOS 设置 -> 通知 -> Google Chrome 中允许通知，否则只弹窗内提示。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 配置弹窗 -->
+    <div
+      x-show="configModal.open"
+      x-transition.opacity
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      style="background: rgba(0,0,0,0.6);"
+      @click.self="closeConfigModal()"
+      x-cloak
+    >
+      <div class="rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" style="background: #1a1a2e; border: 1px solid #2a2a4a;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xl" x-text="configModal.icon"></span>
+            <h3 class="text-base font-semibold text-gray-100" x-text="configModal.title"></h3>
+          </div>
+          <button @click="closeConfigModal()" class="text-gray-500 hover:text-gray-300 text-lg">✕</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-4" x-text="configModal.purpose"></p>
+
+        <!-- 密钥字段 -->
+        <div class="space-y-4">
+          <template x-for="(field, fi) in configModal.fields" :key="field.name">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="text-xs" :class="field.configured ? 'text-green-400' : 'text-red-400'" x-text="field.configured ? '✅' : '❌'"></span>
+                <label class="text-sm font-medium text-gray-300" x-text="field.title"></label>
+                <a x-show="field.url" :href="field.url" target="_blank" class="text-xs text-blue-400 hover:underline ml-auto">获取 →</a>
+              </div>
+              <p class="text-xs text-gray-500 mb-1.5" x-text="field.hint"></p>
+              <input
+                :type="(field.name === 'NOTION_DATABASE_ID' || field.name === 'LLM_BASE_URL' || field.name === 'LLM_MODEL') ? 'text' : 'password'"
+                :placeholder="field.configured ? '已配置，输入新值可覆盖' : (field.name === 'LLM_BASE_URL' ? '粘贴 URL…' : field.name === 'LLM_MODEL' ? '输入模型名…' : '粘贴 Key…')"
+                x-model="field.value"
+                class="w-full px-3 py-2 rounded-md bg-gray-900 border border-gray-700 focus:border-indigo-500 focus:outline-none text-sm font-mono"
+              />
+              <div x-show="field.msg" x-transition class="mt-1 text-xs" :class="field.msgOk ? 'text-green-400' : 'text-red-400'" x-text="field.msg"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 保存密钥（紧跟字段区，位于弹窗上部） -->
+        <div class="flex justify-end mt-4">
+          <button @click="saveConfigModal()" :disabled="configModal.saving" class="px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium transition">
+            <span x-show="!configModal.saving">💾 保存密钥</span>
+            <span x-show="configModal.saving">⏳ 保存中…</span>
+          </button>
+        </div>
+
+        <!-- 鉴权使用说明（仅收录鉴权渠道） -->
+        <template x-if="configModal.idx >= 0 && configChannels[configModal.idx]?.section === 'auth'">
+          <div class="border-t border-gray-700 mt-5 pt-4 space-y-3">
+            <h4 class="text-sm font-medium text-gray-300">📋 填完后还需要在哪里配置？</h4>
+            <div class="space-y-2.5 text-xs text-gray-400">
+              <div class="flex gap-2">
+                <span class="text-gray-600 flex-shrink-0">①</span>
+                <div>
+                  <span class="text-gray-300 font-medium">手机 iOS 快捷指令</span> -- 编辑快捷指令的 HTTP 请求头，添加：
+                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">Authorization: Bearer &lt;你的Token&gt;</code>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-gray-600 flex-shrink-0">②</span>
+                <div>
+                  <span class="text-gray-300 font-medium">电脑浏览器插件</span> -- 打开插件设置页，把 Token 粘贴到「API Token」或「鉴权令牌」输入框
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-gray-600 flex-shrink-0">③</span>
+                <div>
+                  <span class="text-gray-300 font-medium">监控台登录</span> -- 浏览器打开时 URL 里带上：
+                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">?token=&lt;你的Token&gt;</code>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <span class="text-gray-600 flex-shrink-0">④</span>
+                <div>
+                  <span class="text-gray-300 font-medium">Worker 端</span> -- 就是上面这个输入框，保存后 Worker 用它来比对所有请求
+                </div>
+              </div>
+            </div>
+            <div class="p-2.5 rounded-md bg-yellow-950/30 border border-yellow-900/50 text-xs text-yellow-300/80">
+              ⚠️ 改了 Token 后，手机快捷指令和浏览器插件那边也要同步更新，否则收录会失败。
+            </div>
+          </div>
+        </template>
+
+        <!-- 提示词区域（仅 AI 智能分析渠道） -->
+        <template x-if="configModal.idx >= 0 && configChannels[configModal.idx]?.section === 'ai'">
+          <div class="border-t border-gray-700 mt-5 pt-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <h4 class="text-sm font-medium text-gray-300">🎨 提示词配置</h4>
+              <div class="flex gap-2">
+                <button @click="resetPrompts()" class="px-2.5 py-1 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs transition">↩️ 恢复默认</button>
+                <button @click="savePrompts()" :disabled="promptsSaving" class="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-medium transition">
+                  <span x-show="!promptsSaving">💾 保存提示词</span>
+                  <span x-show="promptsSaving">⏳</span>
+                </button>
+              </div>
+            </div>
+
+            <div x-show="promptsSaved" x-transition class="p-2 rounded-md bg-green-950 border border-green-900 text-green-300 text-xs">
+              ✅ 提示词已保存，新的收录请求将使用新提示词。
+            </div>
+
+            <!-- System Prompt -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-medium text-gray-400">System Prompt（系统提示词）</label>
+                <span class="text-xs text-gray-500" x-text="promptForm.system_prompt.length + ' 字符'"></span>
+              </div>
+              <textarea
+                x-model="promptForm.system_prompt"
+                class="w-full h-48 px-3 py-2 rounded-md bg-gray-900 border border-gray-700 focus:border-indigo-500 focus:outline-none text-xs font-mono placeholder-gray-500 resize-y"
+                placeholder="输入系统提示词…"
+              ></textarea>
+            </div>
+
+            <!-- User Template -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-medium text-gray-400">User Template（用户消息模板）</label>
+                <span class="text-xs text-gray-500" x-text="promptForm.user_template.length + ' 字符'"></span>
+              </div>
+              <p class="text-xs text-gray-500 mb-1">占位符：<code class="text-indigo-400">{{title}}</code> <code class="text-indigo-400">{{source_platform}}</code> <code class="text-indigo-400">{{text}}</code></p>
+              <textarea
+                x-model="promptForm.user_template"
+                class="w-full h-36 px-3 py-2 rounded-md bg-gray-900 border border-gray-700 focus:border-indigo-500 focus:outline-none text-xs font-mono placeholder-gray-500 resize-y"
+                placeholder="输入用户消息模板…"
+              ></textarea>
+            </div>
+
+            <p class="text-xs text-gray-500">💡 提示词测试请到「测试」页面进行</p>
+          </div>
+        </template>
+
+        <!-- 底部按钮（只留关闭，保存已在字段区上方） -->
+        <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-700">
+          <button @click="closeConfigModal()" class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm transition">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -247,9 +836,7 @@ function app() {
   return {
     view: "logs",
     logs: [],
-    queue: [],
     stats: [],
-    queuePendingCount: 0,
     expanded: {},
     tabs: {},
     loading: false,
@@ -258,13 +845,33 @@ function app() {
     statusFilter: "",
     searchQ: "",
     token: new URLSearchParams(location.search).get("token") || "",
+    // 测试相关
+    testUrl: "",
+    testFetcher: "auto",
+    testLoading: false,
+    testResult: null,
+    testTab: "md",
+    // 配置部署
+    configKeys: [],
+    configChannels: [],
+    configModal: { open: false, idx: -1, icon: "", title: "", purpose: "", fields: [], saving: false },
+    // 提示词
+    promptForm: { system_prompt: "", user_template: "" },
+    promptsSaving: false,
+    promptsSaved: false,
+    promptTest: { title: "", source_platform: "", text: "" },
+    promptTesting: false,
+    promptTestResult: null,
+    promptTestError: "",
+    promptTestTab: "parsed",
 
     init() {
+      const hash = location.hash.slice(1);
+      if (hash === "config") { this.view = "config"; this.loadConfig(); }
       this.refresh();
-      this.refreshQueueCount();
       this.$watch("autoRefresh", (v) => {
         if (v) {
-          this.autoTimer = setInterval(() => { this.refresh(); this.refreshQueueCount(); }, 5000);
+          this.autoTimer = setInterval(() => { this.refresh(); }, 5000);
         } else {
           clearInterval(this.autoTimer);
         }
@@ -274,61 +881,25 @@ function app() {
     async refresh() {
       this.loading = true;
       try {
-        if (this.view === "logs") {
-          const params = new URLSearchParams({ token: this.token, limit: 100 });
-          if (this.statusFilter) params.set("status", this.statusFilter);
-          if (this.searchQ) params.set("q", this.searchQ);
-          const r = await fetch("/api/logs?" + params.toString());
-          const d = await r.json();
-          if (d.ok) {
-            this.logs = d.logs || [];
-            this.stats = d.stats || [];
-          }
-        } else {
-          const params = new URLSearchParams({ token: this.token, limit: 100, status: "pending" });
-          const r = await fetch("/api/queue?" + params.toString());
-          const d = await r.json();
-          if (d.ok) {
-            this.queue = d.queue || [];
-            this.stats = d.stats || [];
-            this.queuePendingCount = (d.stats || []).find(s => s.status === "pending")?.cnt || 0;
-          }
+        const params = new URLSearchParams({ token: this.token, limit: 100 });
+        if (this.statusFilter) params.set("status", this.statusFilter);
+        if (this.searchQ) params.set("q", this.searchQ);
+        const r = await fetch("/api/logs?" + params.toString());
+        const d = await r.json();
+        if (d.ok) {
+          this.logs = d.logs || [];
+          this.stats = d.stats || [];
         }
       } catch (e) { console.error(e); }
       finally { this.loading = false; }
     },
 
-    async refreshQueueCount() {
-      try {
-        const r = await fetch("/api/queue?token=" + this.token + "&limit=1&status=pending");
-        const d = await r.json();
-        if (d.ok) {
-          this.queuePendingCount = (d.stats || []).find(s => s.status === "pending")?.cnt || 0;
-        }
-      } catch(e) {}
-    },
-
-    async markConsumed(id) {
-      if (!confirm("确认这条已在桌面 Chrome 收录成功了吗？")) return;
-      const r = await fetch("/api/queue/consume?token=" + this.token, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id })
-      });
+    async clearLogs() {
+      if (!confirm("确定清空所有收录日志吗？此操作不可撤销！")) return;
+      if (!confirm("再次确认：清空后无法恢复，Notion 页面不受影响。")) return;
+      const r = await fetch("/api/logs/clear?token=" + this.token, { method: "POST" });
       const d = await r.json();
-      if (d.ok) { this.refresh(); this.refreshQueueCount(); }
-      else alert("操作失败：" + (d.error || "unknown"));
-    },
-
-    async abandonItem(id) {
-      if (!confirm("放弃这条？将从待处理队列中移除，不会写入 Notion。")) return;
-      const r = await fetch("/api/queue/abandon?token=" + this.token, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id })
-      });
-      const d = await r.json();
-      if (d.ok) { this.refresh(); this.refreshQueueCount(); }
+      if (d.ok) { this.refresh(); }
       else alert("操作失败：" + (d.error || "unknown"));
     },
 
@@ -399,6 +970,313 @@ function app() {
       const text = this.pretty(val);
       navigator.clipboard.writeText(text).then(() => alert("已复制到剪贴板 ✓"));
     },
+
+    // ========== 测试抓取 ==========
+    async runTest() {
+      if (!this.testUrl.trim()) {
+        alert("请先粘贴链接 URL");
+        return;
+      }
+      this.testLoading = true;
+      this.testResult = null;
+      try {
+        const payload = {
+          source_url: this.testUrl.trim(),
+          capture_device: "cli",
+          force_fetcher: this.testFetcher !== "auto" ? this.testFetcher : undefined,
+        };
+        const r = await fetch("/api/test-fetch?token=" + this.token, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        this.testResult = d;
+      } catch (e) {
+        alert("测试失败：" + e.message);
+        console.error(e);
+      } finally {
+        this.testLoading = false;
+      }
+    },
+
+    clearTest() {
+      this.testUrl = "";
+      this.testResult = null;
+      this.testTab = "md";
+    },
+
+    copyMarkdown() {
+      const text = this.testResult?.text || "";
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = "✅ 已复制";
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }).catch(() => alert("复制失败，请手动选择文本复制"));
+    },
+
+    downloadMarkdown() {
+      const text = this.testResult?.text || "";
+      if (!text) return;
+      const title = (this.testResult?.title || "extracted").replace(/[\\/:*?"<>|]/g, "_").slice(0, 80);
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = title + ".md";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    },
+
+    // ========== 配置部署 ==========
+    async loadConfig() {
+      try {
+        const r = await fetch("/api/config?token=" + this.token);
+        const d = await r.json();
+        if (d.ok) {
+          // 渠道定义：按收录流程顺序分组
+          const channels = [
+            {
+              id: "auth", section: "auth", icon: "🔐", title: "收录鉴权", purpose: "Worker 收录接口的访问令牌",
+              keys: [
+                { name: "INGEST_TOKEN", short: "Token", title: "收录鉴权令牌", hint: "UUID 或 32 位以上随机字母数字。手机/插件/监控台都用它鉴权", url: "https://www.uuidgenerator.net/" },
+              ],
+            },
+            {
+              id: "tikhub", section: "extract", icon: "🔍", title: "TikHub 内容抓取", purpose: "知乎/小红书/B站/微信等平台正文提取",
+              keys: [
+                { name: "TIKHUB_API_KEY", short: "API Key", title: "TikHub API Key", hint: "在 TikHub 控制台获取", url: "https://tikhub.io/dashboard" },
+              ],
+            },
+            {
+              id: "firecrawl", section: "extract", icon: "🌐", title: "Firecrawl 网页抓取", purpose: "兜底网页正文提取（TikHub 不支持的平台）",
+              keys: [
+                { name: "FIRECRAWL_API_KEY", short: "API Key", title: "Firecrawl API Key", hint: "在 Firecrawl 控制台获取", url: "https://www.firecrawl.dev/" },
+              ],
+            },
+            {
+              id: "ocr", section: "extract", icon: "🖼️", title: "火山引擎 OCR", purpose: "小红书图片文字识别（通用文字识别服务）",
+              keys: [
+                { name: "VOLC_ACCESS_KEY", short: "Access Key ID", title: "火山引擎 Access Key ID", hint: "在火山引擎控制台「访问控制 → API访问密钥」创建", url: "https://console.volcengine.com/iam/keymanage/" },
+                { name: "VOLC_SECRET_KEY", short: "Secret Key", title: "火山引擎 Secret Access Key", hint: "与上面的 Access Key ID 配对使用，注意保密", url: "https://console.volcengine.com/iam/keymanage/" },
+              ],
+            },
+            {
+              id: "llm", section: "ai", icon: "🤖", title: "AI 智能分析", purpose: "内容摘要、分类、标签、关键信息提取",
+              keys: [
+                { name: "ARK_API_KEY", short: "API Key", title: "AI 分析大模型 API Key", hint: "支持 OpenAI 兼容接口的大模型（DeepSeek/OpenAI/通义/豆包等）的 API Key", url: "" },
+                { name: "LLM_BASE_URL", short: "Base URL", title: "大模型 API Base URL", hint: "填你所用大模型的 OpenAI 兼容接口地址，如 https://api.deepseek.com（填到域名即可，自动补 /chat/completions）", url: "" },
+                { name: "LLM_MODEL", short: "模型名", title: "大模型名称", hint: "填你所用大模型的具体模型名，如 deepseek-chat、gpt-4o 等", url: "" },
+              ],
+            },
+            {
+              id: "notion", section: "store", icon: "📝", title: "Notion 知识库", purpose: "收录的内容写入 Notion 数据库",
+              keys: [
+                { name: "NOTION_API_KEY", short: "Token", title: "Notion 写入 Token", hint: "在 Notion 集成页面创建", url: "https://www.notion.so/profile/integrations" },
+                { name: "NOTION_DATABASE_ID", short: "数据库 ID", title: "Notion 数据库 ID", hint: "数据库页面 URL 中间的那段 ID（32位字符串）", url: "https://www.notion.so/" },
+              ],
+            },
+            {
+              id: "bark", section: "notify", icon: "🔔", title: "Bark 推送通知", purpose: "iOS 收录完成后推送通知",
+              keys: [
+                { name: "BARK_KEY", short: "Key", title: "Bark 推送 Key", hint: "打开 Bark App 可看到", url: "https://apps.apple.com/app/bark/id1623918273" },
+              ],
+            },
+          ];
+
+          // 填充配置状态
+          for (const ch of channels) {
+            for (const k of ch.keys) {
+              k.configured = !!d.keys[k.name];
+              k.value = "";
+              k.msg = "";
+              k.msgOk = false;
+            }
+            ch.allConfigured = ch.keys.every(k => k.configured);
+            ch.testing = false;
+            ch.testMsg = "";
+            ch.testOk = false;
+          }
+          this.configChannels = channels;
+          // 保留 configKeys 兼容旧引用
+          this.configKeys = channels.flatMap(ch => ch.keys);
+        }
+      } catch(e) { console.error(e); }
+    },
+
+    openConfigModal(ci) {
+      const ch = this.configChannels[ci];
+      this.configModal = {
+        open: true,
+        idx: ci,
+        icon: ch.icon,
+        title: ch.title,
+        purpose: ch.purpose,
+        fields: ch.keys.map(k => ({ ...k, value: "", msg: "", msgOk: false })),
+        saving: false,
+      };
+      // AI 智能分析渠道：自动加载提示词
+      if (ch.section === "ai") {
+        this.loadPrompts();
+      }
+    },
+
+    closeConfigModal() {
+      this.configModal.open = false;
+      this.configModal.idx = -1;
+    },
+
+    async saveConfigModal() {
+      const fields = this.configModal.fields;
+      const hasInput = fields.some(f => f.value && f.value.trim());
+      if (!hasInput) {
+        fields.forEach(f => { if (!f.configured) { f.msg = "请输入值"; f.msgOk = false; } });
+        return;
+      }
+      this.configModal.saving = true;
+      const payload = {};
+      for (const f of fields) {
+        if (f.value && f.value.trim()) payload[f.name] = f.value.trim();
+      }
+      try {
+        const r = await fetch("/api/config?token=" + this.token, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          // 更新渠道状态
+          const ci = this.configModal.idx;
+          for (const f of fields) {
+            if (f.value && f.value.trim()) {
+              f.configured = true;
+              const chKey = this.configChannels[ci].keys.find(k => k.name === f.name);
+              if (chKey) chKey.configured = true;
+            }
+            f.value = "";
+          }
+          this.configChannels[ci].allConfigured = this.configChannels[ci].keys.every(k => k.configured);
+          this.configModal.saving = false;
+          this.closeConfigModal();
+        } else {
+          fields.forEach(f => { f.msg = "❌ " + (d.error || "保存失败"); f.msgOk = false; });
+          this.configModal.saving = false;
+        }
+      } catch (e) {
+        fields.forEach(f => { f.msg = "❌ " + e.message; f.msgOk = false; });
+        this.configModal.saving = false;
+      }
+    },
+
+    async testChannel(ci) {
+      const ch = this.configChannels[ci];
+      ch.testing = true; ch.testMsg = "";
+      try {
+        // 测试渠道第一个 key（主 key）
+        const mainKey = ch.keys[0];
+        const r = await fetch("/api/config-test?token=" + this.token, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ key: mainKey.name, value: mainKey.value || "" }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          ch.testMsg = "✅ " + (d.message || "测试通过");
+          ch.testOk = true;
+        } else {
+          ch.testMsg = "❌ " + (d.error || d.message || "测试失败");
+          ch.testOk = false;
+        }
+      } catch (e) {
+        ch.testMsg = "❌ " + e.message;
+        ch.testOk = false;
+      } finally {
+        ch.testing = false;
+        setTimeout(() => { ch.testMsg = ""; }, 6000);
+      }
+    },
+
+    // ========== 提示词 ==========
+    async loadPrompts() {
+      try {
+        const r = await fetch("/api/prompts?token=" + this.token);
+        const d = await r.json();
+        if (d.ok) {
+          this.promptForm.system_prompt = d.system_prompt || "";
+          this.promptForm.user_template = d.user_template || "";
+        }
+      } catch(e) { console.error(e); }
+    },
+
+    async savePrompts() {
+      this.promptsSaving = true;
+      this.promptsSaved = false;
+      try {
+        const r = await fetch("/api/prompts?token=" + this.token, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(this.promptForm)
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.promptsSaved = true;
+          setTimeout(() => { this.promptsSaved = false; }, 3000);
+        } else {
+          alert("保存失败：" + (d.error || "unknown"));
+        }
+      } catch(e) {
+        alert("保存失败：" + e.message);
+      } finally {
+        this.promptsSaving = false;
+      }
+    },
+
+    async resetPrompts() {
+      if (!confirm("恢复默认提示词？当前编辑的内容将被覆盖。")) return;
+      try {
+        const r = await fetch("/api/prompts?token=" + this.token + "&default=1");
+        const d = await r.json();
+        if (d.ok) {
+          this.promptForm.system_prompt = d.system_prompt || "";
+          this.promptForm.user_template = d.user_template || "";
+        }
+      } catch(e) { console.error(e); }
+    },
+
+    async testPrompt() {
+      if (!this.promptTest.text.trim()) {
+        alert("请输入测试正文");
+        return;
+      }
+      this.promptTesting = true;
+      this.promptTestResult = null;
+      this.promptTestError = "";
+      try {
+        const r = await fetch("/api/prompt-test?token=" + this.token, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            system_prompt: this.promptForm.system_prompt,
+            user_template: this.promptForm.user_template,
+            title: this.promptTest.title,
+            source_platform: this.promptTest.source_platform,
+            text: this.promptTest.text,
+          })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          this.promptTestResult = d;
+        } else {
+          this.promptTestError = d.error || "测试失败";
+        }
+      } catch(e) {
+        this.promptTestError = e.message;
+      } finally {
+        this.promptTesting = false;
+      }
+    }
   };
 }
 </script>

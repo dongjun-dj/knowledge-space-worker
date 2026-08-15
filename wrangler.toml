@@ -20,3 +20,15 @@ DEFAULT_TOP_K = "5"
 binding = "kb_logs"
 database_name = "kb-logs"
 database_id = "86240761-ee02-4a15-a2c4-5e746652d9a1"
+
+[[queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "ingest-tasks"
+
+[[queues.consumers]]
+queue = "ingest-tasks"
+max_batch_size = 1
+max_batch_timeout = 1
+
+[ai]
+binding = "AI"

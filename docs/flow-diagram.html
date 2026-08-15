@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知识库收录系统 · 抓取流程图（新版）</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #c9d1d9;
+      padding: 40px 20px;
+      min-width: 900px;
+    }
+    .container { max-width: 880px; margin: 0 auto; }
+    h1 { color: #58a6ff; font-size: 24px; margin-bottom: 8px; }
+    .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 32px; }
+
+    /* 流程图节点 */
+    .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+    .node {
+      border-radius: 12px;
+      padding: 16px 28px;
+      text-align: center;
+      max-width: 600px;
+      width: fit-content;
+      position: relative;
+    }
+    .node-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .node-desc { font-size: 13px; line-height: 1.6; }
+
+    /* 颜色 */
+    .entry { background: #1a2332; border: 2px solid #58a6ff; }
+    .entry .node-title { color: #58a6ff; }
+    .judge { background: #2a1e1e; border: 2px solid #f0883e; border-radius: 8px; }
+    .judge .node-title { color: #f0883e; }
+    .tikhub { background: #1a2e1a; border: 2px solid #3fb950; }
+    .tikhub .node-title { color: #3fb950; }
+    .firecrawl { background: #2a2410; border: 2px solid #d29922; }
+    .firecrawl .node-title { color: #d29922; }
+    .skip { background: #161b22; border: 2px solid #484f58; }
+    .skip .node-title { color: #8b949e; }
+    .error { background: #2e1111; border: 2px solid #f85149; }
+    .error .node-title { color: #f85149; }
+    .success { background: #0d2818; border: 2px solid #3fb950; }
+    .success .node-title { color: #3fb950; }
+
+    /* 箭头 */
+    .arrow {
+      width: 2px; height: 24px; background: #484f58;
+      margin: 0 auto;
+      position: relative;
+    }
+    .arrow::after {
+      content: ''; position: absolute; bottom: -6px; left: -5px;
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid #484f58;
+    }
+    .arrow-label {
+      position: absolute; left: 12px; top: 4px;
+      font-size: 12px; color: #8b949e; white-space: nowrap;
+    }
+
+    /* 分叉 */
+    .branch { display: flex; gap: 40px; align-items: flex-start; justify-content: center; }
+    .branch-col { display: flex; flex-direction: column; align-items: center; }
+    .branch-label {
+      font-size: 12px; color: #f0883e; margin-bottom: 4px;
+      background: #0d1117; padding: 2px 10px; border: 1px solid #f0883e;
+      border-radius: 12px;
+    }
+
+    /* 平台列表 */
+    .platform-list {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px;
+      font-size: 12px; margin-top: 8px; text-align: left;
+    }
+    .platform-list span { color: #8b949e; }
+
+    /* 表格 */
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 32px;
+      font-size: 13px;
+    }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #21262d; }
+    th { color: #58a6ff; font-weight: 600; }
+    td { color: #c9d1d9; }
+    .tag-ok { color: #3fb950; }
+    .tag-fail { color: #f85149; }
+    .tag-skip { color: #8b949e; }
+
+    .section-title {
+      color: #58a6ff; font-size: 16px; margin: 32px 0 12px;
+      padding-bottom: 6px; border-bottom: 1px solid #21262d;
+    }
+    .note {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 8px; padding: 12px 16px; font-size: 13px;
+      color: #8b949e; margin-top: 16px; line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>知识库收录系统 · 抓取流程图（新版）</h1>
+  <p class="subtitle">2026-08-05 改造 · 去掉得到大脑 · TikHub 优先 + 浏览器兜底 · 手机端/电脑端区分</p>
+
+  <div class="flow">
+    <!-- 入口 -->
+    <div class="node entry">
+      <div class="node-title">📥 收到一条链接</div>
+      <div class="node-desc">来源：iOS 快捷指令 / Chrome 插件 / 监控台测试</div>
+    </div>
+    <div class="arrow"></div>
+
+    <!-- 第一层判断 -->
+    <div class="node judge">
+      <div class="node-title">🔗 链接是不是 7 个已知平台？</div>
+      <div class="node-desc">小红书 · B站 · 知乎 · 微信公众号 · 微信视频号 · 抖音 · 微博</div>
+      <div class="platform-list">
+        <span>xiaohongshu.com</span><span>bilibili.com / b23.tv</span>
+        <span>zhihu.com</span><span>mp.weixin.qq.com</span>
+        <span>channels.weixin.qq.com</span><span>douyin.com / v.douyin.com</span>
+        <span style="grid-column: span 2">weibo.com / weibo.cn</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分叉 -->
+  <div class="branch" style="margin-top: 8px;">
+    <!-- 左：已知平台 -->
+    <div class="branch-col">
+      <div class="branch-label">✅ 是已知平台</div>
+      <div class="arrow"></div>
+      <div class="node tikhub">
+        <div class="node-title">① TikHub 提取</div>
+        <div class="node-desc">不管 Chrome 插件有没有抓到正文，强制走 TikHub<br>拿最干净的内容（字幕/问答/文章/图文）</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node judge" style="padding: 10px 20px;">
+        <div class="node-desc">TikHub 成功？</div>
+      </div>
+      <div class="branch" style="gap: 20px;">
+        <div class="branch-col">
+          <div class="branch-label" style="color:#3fb950; border-color:#3fb950">✅ 成功</div>
+          <div class="arrow"></div>
+          <div class="node success" style="padding: 10px 20px;">
+            <div class="node-desc">用 TikHub 内容<br>送 AI 分析 → 入库</div>
+          </div>
+        </div>
+        <div class="branch-col">
+          <div class="branch-label" style="color:#f85149; border-color:#f85149">❌ 失败</div>
+          <div class="arrow"></div>
+          <div class="node firecrawl" style="padding: 10px 20px;">
+            <div class="node-title">② Firecrawl</div>
+          </div>
+          <div class="arrow"></div>
+          <div class="node firecrawl" style="padding: 10px 20px;">
+            <div class="node-title">③ Jina Reader</div>
+          </div>
+          <div class="arrow"></div>
+          <div class="node judge" style="padding: 8px 16px;">
+            <div class="node-desc" style="font-size: 12px;">全失败？</div>
+          </div>
+          <div class="branch" style="gap: 12px;">
+            <div class="branch-col">
+              <div class="branch-label" style="color:#8b949e; border-color:#484f58; font-size: 11px;">电脑端</div>
+              <div class="arrow" style="height: 16px;"></div>
+              <div class="node skip" style="padding: 8px 14px;">
+                <div class="node-desc" style="font-size: 12px;">🆘 用浏览器<br>已有正文兜底</div>
+              </div>
+            </div>
+            <div class="branch-col">
+              <div class="branch-label" style="color:#f85149; border-color:#f85149; font-size: 11px;">手机端</div>
+              <div class="arrow" style="height: 16px;"></div>
+              <div class="node error" style="padding: 8px 14px;">
+                <div class="node-desc" style="font-size: 12px;">❌ 正文为空</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：未知平台 -->
+    <div class="branch-col">
+      <div class="branch-label">❓ 未知平台</div>
+      <div class="arrow"></div>
+      <div class="node judge" style="padding: 10px 20px;">
+        <div class="node-title">📱 手机端还是电脑端？</div>
+      </div>
+      <div class="branch" style="gap: 20px; margin-top: 8px;">
+        <div class="branch-col">
+          <div class="branch-label" style="color:#8b949e; border-color:#484f58; font-size: 11px;">📱 手机端</div>
+          <div class="arrow"></div>
+          <div class="node firecrawl" style="padding: 10px 20px;">
+            <div class="node-title">① Firecrawl</div>
+          </div>
+          <div class="arrow"></div>
+          <div class="node firecrawl" style="padding: 10px 20px;">
+            <div class="node-title">② Jina Reader</div>
+          </div>
+          <div class="arrow"></div>
+          <div class="node error" style="padding: 8px 14px;">
+            <div class="node-desc" style="font-size: 12px;">全失败 → ❌ 空</div>
+          </div>
+        </div>
+        <div class="branch-col">
+          <div class="branch-label" style="color:#58a6ff; border-color:#58a6ff; font-size: 11px;">💻 电脑端</div>
+          <div class="arrow"></div>
+          <div class="node judge" style="padding: 10px 18px;">
+            <div class="node-desc">浏览器正文够不够？<br><span style="color:#8b949e; font-size: 11px;">＞500字 且 非纯链接 且 非分享文案</span></div>
+          </div>
+          <div class="branch" style="gap: 16px; margin-top: 4px;">
+            <div class="branch-col">
+              <div class="branch-label" style="color:#3fb950; border-color:#3fb950; font-size: 11px;">✅ 够</div>
+              <div class="arrow" style="height: 16px;"></div>
+              <div class="node skip" style="padding: 8px 14px;">
+                <div class="node-desc" style="font-size: 12px;">跳过抓取<br>直接用</div>
+              </div>
+            </div>
+            <div class="branch-col">
+              <div class="branch-label" style="color:#f0883e; border-color:#f0883e; font-size: 11px;">❌ 不够</div>
+              <div class="arrow" style="height: 16px;"></div>
+              <div class="node firecrawl" style="padding: 8px 14px;">
+                <div class="node-desc" style="font-size: 12px;">Firecrawl<br>→ Jina</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 对比表 -->
+  <div class="section-title">📋 各平台抓取方式对照表</div>
+  <table>
+    <thead>
+      <tr>
+        <th>平台</th>
+        <th>URL 域名</th>
+        <th>TikHub 接口</th>
+        <th>手机端</th>
+        <th>电脑端</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>小红书</td>
+        <td style="font-size:12px">xiaohongshu.com / xhslink.cn</td>
+        <td class="tag-ok">图文+视频自动区分</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>B站</td>
+        <td style="font-size:12px">bilibili.com / b23.tv</td>
+        <td class="tag-ok">视频字幕+简介</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>知乎</td>
+        <td style="font-size:12px">zhihu.com / zhuanlan.zhihu.com</td>
+        <td class="tag-ok">问答+专栏+想法</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>微信公众号</td>
+        <td style="font-size:12px">mp.weixin.qq.com</td>
+        <td class="tag-ok">文章全文</td>
+        <td class="tag-ok">TikHub → Firecrawl</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>微信视频号</td>
+        <td style="font-size:12px">channels.weixin.qq.com</td>
+        <td class="tag-ok">视频信息</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>抖音 🆕</td>
+        <td style="font-size:12px">douyin.com / v.douyin.com</td>
+        <td class="tag-ok">视频描述+图集</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>微博 🆕</td>
+        <td style="font-size:12px">weibo.com / weibo.cn</td>
+        <td class="tag-ok">长微博+图片</td>
+        <td class="tag-ok">TikHub</td>
+        <td class="tag-ok">TikHub（强制）</td>
+      </tr>
+      <tr>
+        <td>其他网页</td>
+        <td style="font-size:12px">其他所有域名</td>
+        <td class="tag-skip">不适用</td>
+        <td class="tag-skip">Firecrawl → Jina</td>
+        <td class="tag-skip">正文够用跳过 / 不够 Firecrawl</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 改动说明 -->
+  <div class="section-title">🔄 本次改动</div>
+  <div class="note">
+    <b style="color:#3fb950;">去掉的：</b><br>
+    • 得到大脑（biji.com）API — 不稳定，已删除<br>
+    • 5 个碎条件判断（textIsJustUrl / textIsMissing / textTooShort / isShareText / isVideoPlatform）— 合并为 2 层判断<br>
+    • isVideoPlatform 里的 youtube/douyin 误匹配 — 已移除<br>
+    <br>
+    <b style="color:#3fb950;">新增的：</b><br>
+    • 抖音提取器 — TikHub <code>/api/v1/douyin/web/fetch_one_video_by_share_url</code><br>
+    • 微博提取器 — TikHub <code>/api/v1/weibo/web_v2/fetch_post_detail</code><br>
+    • 浏览器正文兜底 — 全失败时电脑端用 Chrome 插件抓的正文<br>
+    • 手机端/电脑端区分 — 手机端跳过"正文够不够"判断<br>
+    <br>
+    <b style="color:#3fb950;">简化的判断逻辑：</b><br>
+    旧版 5 个条件交叉判断 → 新版 2 层：① URL 是不是已知平台 ②（未知平台时）正文够不够
+  </div>
+</div>
+</body>
+</html>

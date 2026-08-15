@@ -3,3 +3,5 @@ node_modules
 .dev.vars
 .env
 .DS_Store
+wrangler_tail.log
+wrangler_tail.pid

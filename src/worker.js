@@ -1,3 +1,4 @@
+import { extract as tikhubExtract, normalizeDocument as tikhubNormalize, detectPlatform as tikhubDetectPlatform, toMarkdown as tikhubToMarkdown } from "./extractor/index.js";
 import { ADMIN_HTML } from "./admin.html.js";
 
 const JSON_HEADERS = {
@@ -24,17 +25,17 @@ function buildLogRow(requestId, rawInput, result, durationMs) {
   if (result.ok) {
     if (quality === "blocked") status = "blocked";
     else if (quality === "wayback_recovered") status = "recovered";
-    else if (result.notion_status === "ok") status = "ok";
-    else if (result.notion_status === "error") status = "partial";
+    else if (result.notion_status === "created") status = "ok";
+    else if (result.notion_status === "error" || result.notion_status === "failed") status = "partial";
     else status = "ok";
   }
 
   return [
     now,
     requestId,
-    rawInput?.source_url || "",
+    rawInput?.source_url || result?.source_url || "",
     result.title || rawInput?.title || "",
-    rawInput?.source_platform || result.source_platform || "",
+    result?.source_platform || rawInput?.source_platform || "",
     rawInput?.capture_device || "",
     status,
     JSON.stringify(rawInput || {}),
@@ -70,10 +71,77 @@ export default {
   async fetch(request, env, ctx) {
     return handleRequest(request, env, ctx);
   },
+  async queue(batch, env) {
+    for (const msg of batch.messages) {
+      const { requestId, input } = JSON.parse(msg.body);
+      const startedAt = Date.now();
+      console.log(`[queue] 开始处理任务 ${requestId}`);
+      await loadSecretsFromDB(env);
+
+      try {
+        const result = await ingest(input, env);
+        const durationMs = Date.now() - startedAt;
+
+        // D1 监控日志
+        if (env.kb_logs) {
+          const logRow = buildLogRow(requestId, input, result, durationMs);
+          await env.kb_logs
+            .prepare(`INSERT INTO ingest_logs (created_at, request_id, source_url, title, source_platform, capture_device, status, raw_payload, jina_status, jina_text_length, coze_input, coze_output, coze_error, notion_page_id, notion_page_url, notion_status, notion_error, duration_ms, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+            .bind(...logRow)
+            .run()
+            .catch((e) => console.error("[monitor] D1 写入失败:", e.message));
+
+          // 更新 async_tasks 状态
+          await env.kb_logs
+            .prepare(`UPDATE async_tasks SET status = ?, result_json = ?, error = NULL WHERE id = ?`)
+            .bind("done", JSON.stringify({ ok: result.ok, title: result.title, notion_url: result.notion_page_url }).slice(0, 4000), requestId)
+            .run()
+            .catch((e) => console.error("[monitor] D1 状态更新失败:", e.message));
+        }
+
+        // 📱 Bark 推送通知
+        if (env.BARK_KEY) {
+          await sendBarkNotification(env.BARK_KEY, result).catch((e) => console.error("[bark] 推送失败:", e.message));
+        }
+
+        console.log(`[queue] 任务 ${requestId} 完成 (${durationMs}ms)`);
+        msg.ack();
+      } catch (e) {
+        console.error(`[queue] 任务 ${requestId} 失败: ${e.message}`);
+
+        // 失败也推 Bark
+        if (env.BARK_KEY) {
+          await sendBarkNotification(env.BARK_KEY, {
+            title: input.title || input.source_url || "未知",
+            coze_status: "failed",
+            notion_status: "failed",
+            jina_status: "error",
+            source_platform: "",
+            category: "未知",
+            ok: false,
+          }).catch(() => {});
+        }
+
+        // 更新 async_tasks 状态
+        if (env.kb_logs) {
+          await env.kb_logs
+            .prepare(`UPDATE async_tasks SET status = ?, error = ? WHERE id = ?`)
+            .bind("failed", e.message, requestId)
+            .run()
+            .catch(() => {});
+        }
+
+        msg.ack(); // 即使失败也 ack，避免无限重试
+      }
+    }
+  },
 };
 
 export async function handleRequest(request, env = {}, ctx = {}) {
   const url = new URL(request.url);
+
+  // 每个请求从 D1 加载最新的 secrets（D1 优先于 wrangler secret）
+  await loadSecretsFromDB(env);
 
   if (request.method === "OPTIONS") {
     const resp = new Response(null, { status: 204 });
@@ -85,78 +153,114 @@ export async function handleRequest(request, env = {}, ctx = {}) {
   }
 
   try {
+    // /health 和 /admin 页面不需要鉴权
     if (url.pathname === "/health" && request.method === "GET") {
       return withCors(json({ ok: true, service: "knowledge-space-worker", time: new Date().toISOString() }));
     }
 
-    const auth = authorize(request, env);
-    if (!auth.ok) {
-      return withCors(json({ ok: false, error: auth.error }, 401));
+    // /ingest 外部收录接口：必须有 Authorization header
+    if (url.pathname === "/ingest" && request.method === "POST") {
+      const auth = authorize(request, env);
+      if (!auth.ok) {
+        return withCors(json({ ok: false, error: auth.error }, 401));
+      }
     }
+
+    // 以下都是管理后台 API，用 URL 参数 ?token=xxx 鉴权（各自在路由内校验）
 
       if (url.pathname === "/ingest" && request.method === "POST") {
         const input = await readJson(request);
-        const startedAt = Date.now();
         const requestId = crypto.randomUUID();
-        const result = await ingest(input, env);
-        const durationMs = Date.now() - startedAt;
 
-        // 🆕 iOS + 抓到登录墙 → 自动入队等桌面消费
-        // Chrome 插件失败一般是用户选中操作，不入队
-        const captureDevice = String(input.capture_device || "").toLowerCase();
-        const quality = result._quality || "";
-        const shouldQueue = captureDevice === "ios" && (quality === "blocked" || quality === "jina_error");
-        if (shouldQueue && env.kb_logs) {
-          const queueTask = env.kb_logs
-            .prepare(`INSERT INTO pending_queue (
-              created_at, request_id, source_url, title, reason, capture_device, raw_payload
-            ) VALUES (?,?,?,?,?,?,?)`)
-            .bind(
-              new Date().toISOString(),
-              requestId,
-              input.source_url || input.url || "",
-              input.title || "",
-              quality,
-              captureDevice,
-              JSON.stringify(input).slice(0, 8000)
-            )
-            .run()
-            .catch((e) => console.error("[queue] D1 入队失败:", e.message));
-          if (ctx?.waitUntil) ctx.waitUntil(queueTask);
+        // 🖥️ Chrome 插件走同步模式：直接处理完再返回，插件弹系统通知
+        // 📱 iOS 走异步队列模式：投递消息后立即返回 202，处理完推 Bark
+        const syncMode = input.sync === true || input.capture_device === "chrome-extension";
+
+        if (syncMode) {
+          const startedAt = Date.now();
+          try {
+            const result = await ingest(input, env, requestId);
+            const durationMs = Date.now() - startedAt;
+
+            // 📝 同步模式也写 D1 日志（跟异步队列消费者一样）
+            if (env.kb_logs) {
+              try {
+                const logRow = buildLogRow(requestId, input, result, durationMs);
+                await env.kb_logs
+                  .prepare(`INSERT INTO ingest_logs (created_at, request_id, source_url, title, source_platform, capture_device, status, raw_payload, jina_status, jina_text_length, coze_input, coze_output, coze_error, notion_page_id, notion_page_url, notion_status, notion_error, duration_ms, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+                  .bind(...logRow)
+                  .run();
+              } catch (e) {
+                console.error("[sync] D1 日志写入失败:", e.message);
+              }
+            }
+
+            return withCors(json({
+              ok: true,
+              async: false,
+              request_id: requestId,
+              duration_ms: durationMs,
+              title: result.title || input.title || "",
+              notion_page_url: result.notion_page_url || "",
+            }));
+          } catch (err) {
+            // 📝 失败也记日志
+            if (env.kb_logs) {
+              try {
+                const failResult = { ...input, coze_status: "failed", notion_status: "failed", error: err.message };
+                const logRow = buildLogRow(requestId, input, failResult, Date.now() - startedAt);
+                await env.kb_logs
+                  .prepare(`INSERT INTO ingest_logs (created_at, request_id, source_url, title, source_platform, capture_device, status, raw_payload, jina_status, jina_text_length, coze_input, coze_output, coze_error, notion_page_id, notion_page_url, notion_status, notion_error, duration_ms, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+                  .bind(...logRow)
+                  .run();
+              } catch (e) {
+                console.error("[sync] D1 失败日志写入失败:", e.message);
+              }
+            }
+            return withCors(json({ ok: false, error: err.message || String(err) }, 500));
+          }
         }
 
-        // 🆕 异步写入监控日志（不阻塞用户响应）
+        // 🚀 Cloudflare Queues 异步模式：投递消息后立即返回
+        await env.INGEST_QUEUE.send(JSON.stringify({ requestId, input }));
+
+        // D1 记录任务状态（供 /status 查询）
         if (env.kb_logs) {
-          const logRow = buildLogRow(requestId, input, result, durationMs);
           const writeTask = env.kb_logs
-            .prepare(`INSERT INTO ingest_logs (
-              created_at, request_id, source_url, title, source_platform, capture_device,
-              status, raw_payload, jina_status, jina_text_length,
-              coze_input, coze_output, coze_error,
-              notion_page_id, notion_page_url, notion_status, notion_error,
-              duration_ms, error
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-            .bind(...logRow)
+            .prepare(`INSERT INTO async_tasks (id, created_at, status, source_url) VALUES (?,?,?,?)`)
+            .bind(requestId, new Date().toISOString(), "processing", input.source_url || input.url || "")
             .run()
-            .catch((e) => console.error("[monitor] D1 写入失败:", e.message));
+            .catch((e) => console.error("[queue] D1 状态写入失败:", e.message));
           if (ctx?.waitUntil) ctx.waitUntil(writeTask);
         }
 
-        // ✅ 终极调试方案：所有你需要的信息直接在响应里返回！
         return withCors(json({
-          ...result,
+          ok: true,
+          async: true,
+          message: "已接收，处理完成后会推送通知",
           request_id: requestId,
-          debug_info: {
-            time: new Date().toISOString(),
-            copy_this_to_coze: result.debug_coze_input,
-            coze_raw_body: result.debug_coze_raw_body,
-            coze_parsed: result.debug_coze_parsed,
-            coze_category: result.category,
-            coze_confidence: result.confidence,
-            coze_tags: result.tags,
-            coze_summary: result.summary,
-          },
-        }, result.ok ? 200 : 400));
+        }, 202));
+      }
+
+      // 🆕 异步任务状态查询（保留，兼容已发出的任务）
+      if (url.pathname.startsWith("/status/") && request.method === "GET") {
+        const token = url.searchParams.get("token") || "";
+        if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+          return withCors(json({ ok: false, error: "unauthorized" }, 401));
+        }
+        const taskId = url.pathname.replace("/status/", "");
+        if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not configured" }, 500));
+        const row = await env.kb_logs.prepare(`SELECT * FROM async_tasks WHERE id = ?`).bind(taskId).first();
+        if (!row) return withCors(json({ ok: false, error: "task not found" }, 404));
+        const elapsed = row.created_at ? Date.now() - new Date(row.created_at).getTime() : 0;
+        return withCors(json({
+          ok: true,
+          id: row.id,
+          status: row.status,
+          elapsed_ms: elapsed,
+          result: row.status === "done" && row.result_json ? JSON.parse(row.result_json) : null,
+          error: row.error || null,
+        }));
       }
 
     // 🆕 /admin 监控台静态页面（用 URL 参数 token 认证）
@@ -251,12 +355,411 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       return withCors(json({ ok: true }));
     }
 
+    // POST /api/logs/clear -> 清空所有日志（ingest_logs + async_tasks + pending_queue）
+    if (url.pathname === "/api/logs/clear" && request.method === "POST") {
+      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
+      await env.kb_logs.prepare(`DELETE FROM ingest_logs`).run();
+      await env.kb_logs.prepare(`DELETE FROM async_tasks`).run();
+      await env.kb_logs.prepare(`DELETE FROM pending_queue`).run();
+      return withCors(json({ ok: true, message: "所有日志已清空" }));
+    }
+
     if (url.pathname === "/search" && request.method === "GET") {
       const q = url.searchParams.get("q")?.trim();
+      const token = url.searchParams.get("token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
       const topK = numberFrom(url.searchParams.get("top_k"), numberFrom(env.DEFAULT_TOP_K, 5));
       if (!q) return withCors(json({ ok: false, error: "missing query param: q" }, 400));
       const result = await searchKnowledge(q, topK, env);
       return withCors(json(result));
+    }
+
+    // 🆕 测试抓取接口 -- KB监控台前端调用
+    if (url.pathname === "/api/test-fetch" && request.method === "POST") {
+      const token = url.searchParams.get("token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      const input = await readJson(request);
+      // input: { url: string, force_fetcher?: string }
+      // 从分享文案中提取纯 URL（和 extractor ui.js 的 extractUrl 逻辑一致）
+      const rawSource = input.source_url || "";
+      const urlMatch = rawSource.match(/https?:\/\/[^\s；;]+/i);
+      if (urlMatch) {
+        input.source_url = urlMatch[0].replace(/[。，、!！?？~～]+$/g, "");
+      }
+      const normalized = normalizeIngestPayload({
+        source_url: input.source_url,
+        text: input.source_url, // iOS 场景：text 就是 url，触发抓取
+        category: input.category || "测试",
+      });
+      const startedAt = Date.now();
+      let item = normalized;
+
+      // 强制指定抓取器
+      // 前端发 "tikhub" / "tikhub_ocr" / "firecrawl" / "jina"
+      if ((input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") && env.TIKHUB_API_KEY) {
+        const forceOCR = input.force_fetcher === "tikhub_ocr";
+        try {
+          const tikhubResult = await fetchFromTikhub(input.source_url, env);
+          if (tikhubResult.ok && tikhubResult.markdown) {
+            item.text = tikhubResult.markdown;
+            item.title = tikhubResult.title || item.title;
+            item.author = tikhubResult.author || item.author;
+            if (tikhubResult.published_at) item.published_at = tikhubResult.published_at.split('T')[0];
+            item._jina_status = `tikhub_ok_len${item.text.length}_${Date.now() - startedAt}ms`;
+            item._fetcher = "tikhub" + (forceOCR ? "+ocr" : "");
+            item._quality = "ok";
+            console.log(`[test-fetch] ✅ TikHub ok: ${item.text.length} chars`);
+
+            // 🤖 图片OCR（小红书图文笔记，或强制 OCR 模式）
+            const urlForPlatform = item.source_url || input.source_url || "";
+            const needVision = forceOCR || /xiaohongshu\.com|xhslink/i.test(urlForPlatform);
+            if (item.text.length > 0 && needVision) {
+              try {
+                const beforeLen = item.text.length;
+                item.text = await enhanceWithVisionAI(item.text, env);
+                if (item.text.length > beforeLen) {
+                  const visionMs = Date.now() - startedAt;
+                  item._jina_status += `+vision_${visionMs}ms`;
+                }
+              } catch (e) {
+                item._jina_status += `+vision_err:${e.message.slice(0, 80)}`;
+              }
+            }
+          } else {
+            item._jina_status = `tikhub_fail:${tikhubResult.error}`;
+            item._fetcher = "tikhub";
+            item._quality = "fail";
+            item.text = `抓取失败: ${tikhubResult.error}`;
+          }
+        } catch (e) {
+          item._jina_status = `tikhub_exception:${e.message}`;
+          item._fetcher = "tikhub";
+          item._quality = "fail";
+          item.text = `抓取异常: ${e.message}`;
+        }
+      } else if (input.force_fetcher === "firecrawl" && env.FIRECRAWL_API_KEY) {
+        // 强制 Firecrawl
+        try {
+          const fc = await fetchFromFirecrawl(input.source_url, env);
+          if (fc.ok && fc.markdown) {
+            item.text = fc.markdown;
+            item.title = fc.title || item.title;
+            item._jina_status = `firecrawl_ok_${Date.now() - startedAt}ms`;
+            item._fetcher = "firecrawl";
+            item._quality = "ok";
+          } else {
+            item._jina_status = `firecrawl_fail:${fc.error}`;
+            item._fetcher = "firecrawl";
+            item._quality = "fail";
+            item.text = `抓取失败: ${fc.error}`;
+          }
+        } catch (e) {
+          item._jina_status = `firecrawl_exception:${e.message}`;
+          item._fetcher = "firecrawl";
+          item._quality = "fail";
+          item.text = `抓取异常: ${e.message}`;
+        }
+      } else if (input.force_fetcher === "jina") {
+        // 强制 Jina Reader
+        try {
+          const jina = await fetchFromJina(input.source_url, env);
+          if (jina.markdown) {
+            item.text = jina.markdown;
+            item.title = jina.title || item.title;
+            item._jina_status = `jina_ok_${Date.now() - startedAt}ms`;
+            item._fetcher = "jina";
+            item._quality = "ok";
+          } else {
+            item._jina_status = `jina_fail:${jina.status}`;
+            item._fetcher = "jina";
+            item._quality = "fail";
+            item.text = `抓取失败: ${jina.status}`;
+          }
+        } catch (e) {
+          item._jina_status = `jina_exception:${e.message}`;
+          item._fetcher = "jina";
+          item._quality = "fail";
+          item.text = `抓取异常: ${e.message}`;
+        }
+      } else {
+        // 自动按优先级
+        await fetchArticleIfNeeded(item, env);
+      }
+
+      const durationMs = Date.now() - startedAt;
+      // 测试页只展示抓取提取结果，不走 AI 分析 / Notion 写入等后续流程
+      return withCors(json({
+        ok: true,
+        source_url: input.source_url,
+        title: item.title,
+        text: item.text || "",
+        author: item.author,
+        published_at: item.published_at,
+        summary: item.summary,
+        key_points: item.key_points,
+        capture_device: item.capture_device,
+        duration_ms: durationMs,
+        _jina_status: item._jina_status,
+        _fetcher: item._fetcher,
+        _quality: item._quality,
+      }));
+    }
+
+    // ===== 提示词动态配置 API =====
+
+    // GET /api/config?token=xxx - 返回哪些 secret 已配置（env + D1）
+    if (url.pathname === "/api/config" && request.method === "GET") {
+      const token = url.searchParams.get("token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      await loadSecretsFromDB(env);
+      const keys = {
+        ARK_API_KEY: !!env.ARK_API_KEY,
+        LLM_BASE_URL: !!env.LLM_BASE_URL,
+        LLM_MODEL: !!env.LLM_MODEL,
+        TIKHUB_API_KEY: !!env.TIKHUB_API_KEY,
+        FIRECRAWL_API_KEY: !!env.FIRECRAWL_API_KEY,
+        NOTION_API_KEY: !!env.NOTION_API_KEY,
+        NOTION_DATABASE_ID: !!env.NOTION_DATABASE_ID,
+        BARK_KEY: !!env.BARK_KEY,
+        INGEST_TOKEN: !!env.INGEST_TOKEN,
+        VOLC_ACCESS_KEY: !!env.VOLC_ACCESS_KEY,
+        VOLC_SECRET_KEY: !!env.VOLC_SECRET_KEY,
+      };
+      return withCors(json({ ok: true, keys }));
+    }
+
+    // POST /api/config?token=xxx - 保存 API Key 到 D1
+    if (url.pathname === "/api/config" && request.method === "POST") {
+      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
+      const body = await readJson(request);
+      const allowed = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY"];
+      const saved = [];
+      for (const key of allowed) {
+        if (key in body && typeof body[key] === "string" && body[key].trim()) {
+          await env.kb_logs
+            .prepare("INSERT INTO kb_config (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')")
+            .bind(key, body[key].trim(), body[key].trim())
+            .run();
+          saved.push(key);
+        }
+      }
+      return withCors(json({ ok: true, saved }));
+    }
+
+    // POST /api/config-test?token=xxx - 测试单个 Key 连通性
+    if (url.pathname === "/api/config-test" && request.method === "POST") {
+      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      const body = await readJson(request);
+      const keyName = body.key;
+      // 先把 D1 里保存的配置加载到 env（否则测试时 D1 里的 LLM_BASE_URL 等不生效）
+      await loadSecretsFromDB(env);
+      // 如果输入框有值，用输入框的值测试；否则用已配置的 env 值
+      const testEnv = { ...env };
+      if (body.value && body.value.trim()) testEnv[keyName] = body.value.trim();
+
+      try {
+        let message = "";
+        switch (keyName) {
+          case "ARK_API_KEY": {
+            const llmBaseUrl = normalizeLLMBaseUrl(testEnv.LLM_BASE_URL);
+            const llmModel = testEnv.LLM_MODEL;
+            const r = await callLLM({ llmBaseUrl, llmModel, apiKey: testEnv.ARK_API_KEY, systemPrompt: "你是测试助手", userContent: "hi" });
+            if (r.ok) message = "AI API 连通正常";
+            else { const t = await r.text(); return withCors(json({ ok: false, error: `AI API 返回 ${r.status}: ${t.slice(0, 100)}` })); }
+            break;
+          }
+          case "TIKHUB_API_KEY": {
+            // 用 webhook 端点验证 key 有效性
+            const r = await fetch("https://api.tikhub.io/api/v1/tikhub/webhook", { headers: { Authorization: `Bearer ${testEnv.TIKHUB_API_KEY}` } });
+            if (r.status === 401 || r.status === 403) { const t = await r.text(); return withCors(json({ ok: false, error: `TikHub 认证失败 (${r.status})` })); }
+            else if (r.ok || r.status === 404 || r.status === 405) message = "TikHub Key 有效";
+            else { const t = await r.text(); return withCors(json({ ok: false, error: `TikHub 返回 ${r.status}` })); }
+            break;
+          }
+          case "FIRECRAWL_API_KEY": {
+            // Firecrawl v0 端点
+            const r = await fetch("https://api.firecrawl.dev/v0/credit-usage", { headers: { Authorization: `Bearer ${testEnv.FIRECRAWL_API_KEY}` } });
+            if (r.ok) { const d = await r.json(); message = `Firecrawl 连通正常，剩余额度: ${d.data?.remaining_credits ?? "未知"}`; }
+            else if (r.status === 401) return withCors(json({ ok: false, error: "Firecrawl 认证失败" }));
+            else message = `Firecrawl 返回 ${r.status}（Key 可能有效）`;
+            break;
+          }
+          case "NOTION_API_KEY": {
+            const r = await fetch("https://api.notion.com/v1/users/me", { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
+            if (r.ok) { const d = await r.json(); message = `Notion 连通正常，机器人: ${d.name || "未知"}`; }
+            else { const t = await r.text(); return withCors(json({ ok: false, error: `Notion 返回 ${r.status}: ${t.slice(0, 100)}` })); }
+            break;
+          }
+          case "NOTION_DATABASE_ID": {
+            if (!testEnv.NOTION_API_KEY) return withCors(json({ ok: false, error: "需要先配置 NOTION_API_KEY" }));
+            const r = await fetch(`https://api.notion.com/v1/databases/${testEnv.NOTION_DATABASE_ID}`, { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
+            if (r.ok) { const d = await r.json(); message = `数据库可访问: ${d.title?.[0]?.plain_text || "无标题"}`; }
+            else { const t = await r.text(); return withCors(json({ ok: false, error: `Notion 数据库返回 ${r.status}: ${t.slice(0, 100)}` })); }
+            break;
+          }
+          case "BARK_KEY": {
+            const r = await fetch(`https://api.day.app/${testEnv.BARK_KEY}/${encodeURIComponent("知识库配置测试")}/${encodeURIComponent("如果你收到了这条通知说明Bark配置正确")}`);
+            if (r.ok) { const d = await r.json().catch(() => ({})); message = d.code === 200 ? "Bark 推送已发送，请检查手机通知" : "Bark 返回: " + JSON.stringify(d); }
+            else return withCors(json({ ok: false, error: `Bark 返回 ${r.status}` }));
+            break;
+          }
+          case "VOLC_ACCESS_KEY": {
+            if (!testEnv.VOLC_SECRET_KEY) return withCors(json({ ok: false, error: "需要先配置 VOLC_SECRET_KEY" }));
+            // 用一张 1x1 测试图片验证 AK/SK + OCR 服务是否可用
+            const testBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            try {
+              await callVolcOCR(testBase64, testEnv.VOLC_ACCESS_KEY, testEnv.VOLC_SECRET_KEY);
+              message = "火山引擎 OCR 连通正常";
+            } catch (e) {
+              const msg = e.message || "";
+              // code=63001 = 测试图片太小导致 OCR 无法处理，但说明 AK/SK 签名和服务都正常
+              if (msg.includes("63001") || msg.includes("code=10000") || msg.includes("line_texts")) {
+                message = "火山引擎 OCR 连通正常（AK/SK 验证通过）";
+              } else if (msg.includes("50013") || msg.includes("未开通") || msg.includes("Service")) {
+                message = "Key 有效，但 OCR 服务可能未开通（请在控制台开通通用文字识别）";
+              } else if (msg.includes("403") || msg.includes("401") || msg.includes("Signature") || msg.includes("Auth")) {
+                return withCors(json({ ok: false, error: "AK/SK 认证失败: " + msg.slice(0, 150) }));
+              } else {
+                return withCors(json({ ok: false, error: "OCR 测试失败: " + msg.slice(0, 150) }));
+              }
+            }
+            break;
+          }
+          case "VOLC_SECRET_KEY": {
+            message = "Secret Key 已保存，可点击「测试连通」验证 Access Key ID";
+            break;
+          }
+          case "LLM_BASE_URL": {
+            message = "Base URL 已保存，可点击 AI 智能分析的测试验证连通性";
+            break;
+          }
+          case "LLM_MODEL": {
+            message = "模型名已保存，可点击 AI 智能分析的测试验证连通性";
+            break;
+          }
+          case "INGEST_TOKEN": {
+            message = "令牌格式正确，保存后即可用于鉴权";
+            break;
+          }
+          default:
+            return withCors(json({ ok: false, error: "未知的 Key 名称" }));
+        }
+        return withCors(json({ ok: true, message }));
+      } catch (e) {
+        return withCors(json({ ok: false, error: e.message || String(e) }));
+      }
+    }
+
+    // GET /api/prompts?token=xxx - 返回当前提示词
+    if (url.pathname === "/api/prompts" && request.method === "GET") {
+      const token = url.searchParams.get("token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      const isDefault = url.searchParams.get("default") === "1";
+      if (isDefault) {
+        return withCors(json({ ok: true, system_prompt: DEFAULT_SYSTEM_PROMPT, user_template: DEFAULT_USER_TEMPLATE, is_default: true }));
+      }
+      const { system_prompt, user_template, is_default } = await loadPromptsFromDB(env);
+      return withCors(json({ ok: true, system_prompt, user_template, is_default }));
+    }
+
+    // POST /api/prompts?token=xxx - 保存提示词到 D1 kb_config (UPSERT)
+    if (url.pathname === "/api/prompts" && request.method === "POST") {
+      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
+      const body = await readJson(request);
+      const { system_prompt, user_template } = body;
+      if (typeof system_prompt !== "string" || typeof user_template !== "string") {
+        return withCors(json({ ok: false, error: "system_prompt 和 user_template 必须是字符串" }, 400));
+      }
+      const now = new Date().toISOString();
+      await env.kb_logs
+        .prepare(`INSERT INTO kb_config (key, value, updated_at) VALUES ('system_prompt', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+        .bind(system_prompt, now)
+        .run();
+      await env.kb_logs
+        .prepare(`INSERT INTO kb_config (key, value, updated_at) VALUES ('user_template', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+        .bind(user_template, now)
+        .run();
+      return withCors(json({ ok: true, message: "提示词已保存" }));
+    }
+
+    // POST /api/prompt-test?token=xxx - 用自定义提示词测试调用 AI 模型
+    if (url.pathname === "/api/prompt-test" && request.method === "POST") {
+      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+        return withCors(json({ ok: false, error: "unauthorized" }, 401));
+      }
+      const body = await readJson(request);
+      await loadSecretsFromDB(env);
+      const systemPrompt = typeof body.system_prompt === "string" ? body.system_prompt : DEFAULT_SYSTEM_PROMPT;
+      const userTemplate = typeof body.user_template === "string" ? body.user_template : DEFAULT_USER_TEMPLATE;
+      const testItem = {
+        title: body.title || "",
+        text: body.text || "",
+        source_platform: body.source_platform || "",
+      };
+      const userContent = renderUserTemplate(userTemplate, testItem);
+
+      if (!env.ARK_API_KEY) {
+        return withCors(json({ ok: false, error: "缺少 ARK_API_KEY，无法测试" }, 500));
+      }
+
+      try {
+        const startTime = Date.now();
+        const llmBaseUrl = normalizeLLMBaseUrl(env.LLM_BASE_URL);
+        const llmModel = env.LLM_MODEL;
+        const resp = await callLLM({ llmBaseUrl, llmModel, apiKey: env.ARK_API_KEY, systemPrompt, userContent });
+
+        const bodyText = await resp.text();
+        const durationMs = Date.now() - startTime;
+        if (!resp.ok) {
+          return withCors(json({ ok: false, error: `AI API 返回 ${resp.status}`, detail: bodyText.slice(0, 500) }, 502));
+        }
+        const parsed = JSON.parse(bodyText);
+        let content = parsed?.choices?.[0]?.message?.content || "";
+        // 去掉可能的 markdown 代码块包裹
+        if (content.startsWith("```")) {
+          content = content.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+        }
+        let parsedContent = null;
+        try {
+          parsedContent = JSON.parse(content);
+        } catch (_) {}
+        return withCors(json({
+          ok: true,
+          parsed: parsedContent,
+          raw_content: content,
+          duration_ms: durationMs,
+          model: parsed?.model || "",
+          usage: parsed?.usage || {},
+          finish_reason: parsed?.choices?.[0]?.finish_reason || "",
+          user_content: userContent,
+        }));
+      } catch (e) {
+        return withCors(json({ ok: false, error: e.message || String(e) }, 500));
+      }
     }
 
     return withCors(json({ ok: false, error: "not found" }, 404));
@@ -284,6 +787,7 @@ export async function ingest(input, env = {}) {
     tags: enriched.tags,
     entities: enriched.entities,
     source_platform: enriched.source_platform,
+    source_url: enriched.source_url,
     published_at: enriched.published_at,
     author: enriched.author,
     importance: enriched.importance,
@@ -303,9 +807,11 @@ export async function ingest(input, env = {}) {
     // 🔍 Jina Reader抓取状态
     jina_status: normalized._jina_status || null,
     jina_error: normalized._jina_error || null,
+    _debug_fetch: `text_len=${(normalized.text||"").length} url=${normalized.source_url} device=${normalized.capture_device}`,
     // 🆕 抓取质量 + Wayback 兜底状态
     _quality: normalized._quality || null,
     _wayback_status: normalized._wayback_status || null,
+    _debug_tikhub: normalized._debug_tikhub || null,
   };
 }
 
@@ -326,9 +832,10 @@ function normalizeSourcePlatform(sourcePlatform, host = "") {
   // 标准化成中文，不管输入是英文还是中文
   const mapping = [
     [["zhihu", "知乎"], "知乎"],
-    [["bilibili", "b站", "bilibil", "bili"], "B站"],
+    [["bilibili", "b站", "bilibil", "bili", "b23"], "B站"],
     [["xiaohongshu", "小红书", "xhs"], "小红书"],
     [["douyin", "抖音"], "抖音"],
+    [["weibo", "微博"], "微博"],
     [["weixin", "微信", "公众号", "微信公众号", "mp.weixin.qq.com"], "微信公众号"],
     [["chatgpt", "openai", "gpt", "豆包", "doubao", "claude", "anthropic"], "AI对话"],
     [["网页", "web", "website", "article"], "网页"],
@@ -358,7 +865,7 @@ export function normalizeIngestPayload(input) {
   // 清洗标题：去掉知乎的私信、消息、后缀等垃圾信息
   function cleanTitle(title) {
     if (!title) return "";
-    return title
+    let t = title
       .replace(/^\(\d+\+? 封私信 \/ \d+ 条消息\)\s*/, "")
       .replace(/^\(\d+\+? 封私信\)\s*/, "")
       .replace(/^\(\d+ 条消息\)\s*/, "")
@@ -368,6 +875,10 @@ export function normalizeIngestPayload(input) {
       .replace(/\s*-\s*知乎日报\s*$/g, "")
       .replace(/\s*-\s*知乎盐选\s*$/g, "")
       .trim();
+    // 如果是 [xxx](url) markdown 链接格式，提取 xxx
+    const mdLink = t.match(/^\[([^\]]{5,})\]\(https?:\/\/[^)]+\)$/);
+    if (mdLink) t = mdLink[1].trim();
+    return t;
   }
 
   const title = cleanTitle(stringOrEmpty(input.title).trim()) || guessTitle(text, input.source_url);
@@ -405,34 +916,19 @@ export async function fetchArticleIfNeeded(item, env = {}) {
   const text = String(item.text || "").trim();
   const url = String(item.source_url || "").trim();
   const captureDevice = String(item.capture_device || "").toLowerCase();
-
-  // 判定：text 是否就是一个URL（正文极短且以http开头）
-  const textIsJustUrl = text.length < 500 && /^https?:\/\//i.test(text);
-  const textIsMissing = text.length < 50 && url;
-  // 🆕 iOS Safari阅读器可能抽取不全，短于800字符时用Jina补一遍
-  // ⚠️ 只对iOS快捷指令生效，Chrome插件抓到的DOM即使短也不能覆盖（避免Jina撞验证墙倒吞好内容）
-  const textTooShort = captureDevice === "ios" 
-    && text.length > 0 
-    && text.length < 800 
-    && url 
-    && !/^https?:\/\//i.test(text);
-
-  if (!textIsJustUrl && !textIsMissing && !textTooShort) {
-    console.log(`[Jina] 跳过抓取，text已有正文（长度：${text.length}，device：${captureDevice}）`);
-    return;
-  }
-
-  if (textTooShort) {
-    console.log(`[Jina] 触发原因: iOS text只有${text.length}字符（可能是Safari阅读器抽取不全）`);
-  }
+  console.log(`[Fetch] 入口: text_len=${text.length} url=${url} device=${captureDevice} text_head=${text.slice(0,60)}`);
 
   if (!url) {
     console.log("[Fetch] 跳过抓取，无source_url");
     return;
   }
 
-  // 🆕 已知 App 独占分享域名 / 路径 —— 网页里根本没内容，直接跳过抓取，节省 credit
-  // 这些链接只在 App 内能看，任何抓手都救不了
+  // 正文是否就是纯链接（用于后续判断）
+  const textIsJustUrl = text.length < 500 && /^https?:\/\//i.test(text);
+  // 分享文案：text 含已知平台域名但不是纯 URL
+  const isShareText = /(xhslink\.(cn|com)|b23\.tv|zhihu\.com|bilibili\.com|xiaohongshu\.com|mp\.weixin\.qq\.com|douyin\.com|weibo\.com)/i.test(text) && !textIsJustUrl && text.length < 500;
+
+  // 🆕 已知 App 独占分享域名 / 路径 -- 网页里根本没内容，直接跳过抓取
   const appOnlyPatterns = [
     /^https?:\/\/oia\.zhihu\.com\//i,       // 知乎盐选/付费/App 分享
     /\/km_paid_content\//i,                  // 知乎付费专栏
@@ -442,95 +938,75 @@ export async function fetchArticleIfNeeded(item, env = {}) {
     console.log(`[Fetch] ⚠️ 已知 App 独占分享链，网页版无内容，跳过抓取：${url}`);
     item._jina_status = "skip_app_only_domain";
     item._quality = "app_only";
-    // 保留原 text（会是那个 App 引导页 markdown），供后续人工识别
     return;
   }
 
-  // ==================== 🎬 B 站分支：优先 得到大脑开放平台 获取完整字幕（官方 API） ====================
-  // 强制进分支，只要 DEDAO_API_KEY 存在就进 —— 排查为什么没进去
-  if (env.DEDAO_API_KEY && /(bilibili\.com|b23\.tv)/i.test(url)) {
-    try {
-      const startTime = Date.now();
-      // 得到大脑开放平台官方 API：创建笔记（自动提取 B 站字幕）
-      const apiUrl = "https://openapi.biji.com/open/api/v1/resource/note/create";
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 强制 90 秒超时
-      const resp = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "X-Client-ID": env.DEDAO_CLIENT_ID,
-          "Authorization": env.DEDAO_API_KEY,
-          "Content-Type": "application/json",
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        },
-        body: JSON.stringify({ url }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.log(`[Dedao-B站] ❌ HTTP ${resp.status}，停止：${errText.slice(0, 200)}`);
-        throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 100)}`);
-      }
-      const data = await resp.json();
-      // 官方返回格式：{success: true, data: {title: "xxx", content: "完整字幕markdown"}}
-      if (data.success && data.data && data.data.content && data.data.content.trim().length > 100) {
-        item.text = data.data.content;
-        // 标题覆写
-        if (data.data.title && data.data.title.trim().length > 5) {
-          const currTitle = String(item.title || "").trim();
-          if (!currTitle || /^https?:\/\//i.test(currTitle)) {
-            item.title = data.data.title.trim();
-          }
-        }
-        item._jina_status = `dedao_bilibili_ok_${Date.now() - startTime}ms_full-text`;
-        item._fetcher = "dedao_bilibili";
-        item._quality = "ok";
-        console.log(`[Dedao-B站] ✅ ${Date.now() - startTime}ms，full text ${data.data.content.length} chars`);
-        // 拿到了就不继续兜底 —— 用户要求只测连通性
+  // ==================== 🎬 TikHub 提取分支（已知平台强制走，不管正文多长） ====================
+  // 已知平台正则：小红书/B站/知乎/微信公众号/微信视频号/抖音/微博
+  const KNOWN_PLATFORM_RE = /(xiaohongshu\.com|xhslink\.(cn|com)|bilibili\.com|b23\.tv|zhihu\.com|mp\.weixin\.qq\.com|channels\.weixin\.qq\.com|weixin\.qq\.com\/sph|douyin\.com|iesdouyin\.com|v\.douyin\.com|weibo\.com|weibo\.cn)/i;
+  const isKnownPlatform = KNOWN_PLATFORM_RE.test(url);
+  const isIOS = captureDevice === "ios";
+
+  // 手机端：已知平台直接走 TikHub，不走正文判断
+  // 电脑端：已知平台也直接走 TikHub（Chrome 插件抓的内容不是最终内容）
+  // 未知平台：手机端直接 Firecrawl，电脑端先判断正文够不够
+  if (!isKnownPlatform) {
+    if (isIOS) {
+      // 手机端未知平台：正文肯定空，直接抓
+      console.log(`[Fetch] 手机端未知平台，直接抓取: ${url}`);
+    } else {
+      // 电脑端未知平台：判断正文够不够用
+      const textSufficient = text.length > 500 && !textIsJustUrl && !isShareText;
+      if (textSufficient) {
+        console.log(`[Jina] 跳过抓取，text已有正文（长度：${text.length}，device：${captureDevice}）`);
         return;
-      } else {
-        const msg = data.error?.message || "content too short or empty";
-        console.log(`[Dedao-B站] ❌ ${msg}（${(data.data?.content||'').length} chars），停止`);
-        throw new Error(msg);
       }
-    } catch (e) {
-      console.log(`[Dedao-B站] ❌ 失败：${e.message}，不兜底，直接返回`);
-      item._jina_status = `dedao_bilibili_fail:${e.message}`;
-      item._fetcher = "dedao_bilibili";
-      item._quality = "fail";
-      // 不降级，直接继续往后 —— 但 item._quality=fail，最终会返回错误给你看
+      console.log(`[Fetch] 电脑端未知平台，正文不够，触发抓取: text_len=${text.length}`);
     }
+  } else {
+    console.log(`[Fetch] 已知平台，强制走 TikHub: ${url}`);
   }
 
-  // ==================== 🎬 B 站分支：走 TikHub 结构化 API（免费额度） ====================
-  if (env.TIKHUB_API_KEY && /(bilibili\.com|b23\.tv)/i.test(url)) {
+  if (env.TIKHUB_API_KEY && isKnownPlatform) {
     try {
-      const bili = await fetchFromTikhubBilibili(url, env);
-      if (bili.ok && bili.markdown) {
-        if (!item.text) item.text = bili.markdown; // 如果 得到大脑 已经拿了 text，这里就不覆盖了
-        // 覆写 title / author / published_at / 封面（只在原字段空/是 URL 时覆盖）
-        const currTitle = String(item.title || "").trim();
-        if (bili.title && (!currTitle || /^https?:\/\//i.test(currTitle) || currTitle.length < 5)) {
-          item.title = bili.title;
-        }
-        if (bili.author && !item.author) item.author = bili.author;
-        if (bili.published_at && !item.published_at) item.published_at = bili.published_at;
-        if (bili.cover_url && !item.cover_url) item.cover_url = bili.cover_url;
-        const duration = bili.duration || (Date.now() - startTime);
-        item._jina_status = (item._jina_status ? item._jina_status + " " : "") + `tikhub_bilibili_ok_${duration}ms_bvid:${bili.bvid}`;
-        if (!item._fetcher) item._fetcher = "tikhub_bilibili";
+      console.log(`[TikHub-ingest] url=${url} platform=${tikhubDetectPlatform(url)}`);
+      const tikhubResult = await fetchFromTikhub(url, env);
+      // 🆕 debug: 记录 TikHub 返回的原始信息
+      item._debug_tikhub = `url=${url}|ok=${tikhubResult.ok}|title=${(tikhubResult.title||"").slice(0,60)}|markdown_len=${(tikhubResult.markdown||"").length}|error=${tikhubResult.error||""}`;
+      if (tikhubResult.ok && tikhubResult.markdown) {
+        item.text = tikhubResult.markdown;
+        if (tikhubResult.title) item.title = tikhubResult.title;
+        if (tikhubResult.author) item.author = tikhubResult.author;
+        if (tikhubResult.published_at) item.published_at = tikhubResult.published_at.split('T')[0];
+        item._jina_status = `tikhub_ok_len${item.text.length}`;
+        item._fetcher = "tikhub";
         item._quality = "ok";
-        console.log(`[TikHub-B站] ✅ ${duration}ms bvid=${bili.bvid} view=${bili.view_count}`);
-        // 不早退 —— TikHub 只补字段，接下来继续走 Firecrawl 如果还没 text
+        console.log(`[TikHub-ingest] ✅ title=${tikhubResult.title?.slice(0,50)} text=${item.text.length}chars`);
+
+        // 🤖 图片OCR：仅小红书图文笔记（微信文章正文已是文字，图片多为配图不值得OCR）
+        const pipelineUrl = item.source_url || url || "";
+        const needVision = /xiaohongshu\.com|xhslink/i.test(pipelineUrl);
+        if (item.text.length > 0 && needVision) {
+          try {
+            const beforeLen = item.text.length;
+            item.text = await enhanceWithVisionAI(item.text, env);
+            if (item.text.length > beforeLen) {
+              console.log(`[VisionAI] ✅ 图片识别完成，新增 ${item.text.length - beforeLen} 字符`);
+              item._jina_status += "+vision";
+            }
+          } catch (e) {
+            console.log(`[VisionAI] ❌ 识别失败: ${e.message}`);
+          }
+        }
+
+        return;
       } else {
-        console.log(`[TikHub-B站] ❌ ${bili.error}，降级到 Firecrawl`);
-        item._jina_status = `tikhub_bilibili_fail:${bili.error}`;
-        // 继续走 Firecrawl 兜底
+        console.log(`[TikHub] ❌ ${tikhubResult.error}，降级到 Firecrawl`);
+        item._jina_status = `tikhub_fail:${tikhubResult.error}`;
       }
     } catch (err) {
-      console.error("[TikHub-B站] 异常:", err.message);
-      item._jina_status = `tikhub_bilibili_exception:${err.message}`;
+      console.error("[TikHub] 异常:", err.message);
+      item._jina_status = `tikhub_exception:${err.message}`;
     }
   }
 
@@ -550,12 +1026,43 @@ export async function fetchArticleIfNeeded(item, env = {}) {
         fetchStatus = `firecrawl_ok_len${markdown.length}_${fc.duration}ms_proxy:${fc.proxyUsed || "?"}`;
         fetcher = "firecrawl";
         console.log(`[Firecrawl] ✅ 抓取成功: ${markdown.length}字符 (${fc.duration}ms, proxy=${fc.proxyUsed})`);
-        // 🆕 顺手拿 title：iOS 场景 item.title 可能就是 URL，也要覆盖
-        // 判定规则：Firecrawl 有 title，且当前 item.title 是空/URL/太短
+        // 🆕 顺手拿 title：iOS 场景 item.title 可能就是 URL 或域名，需要覆盖
         const currTitle = String(item.title || "").trim();
         const titleIsUrl = /^https?:\/\//i.test(currTitle);
-        if (fc.title && (!currTitle || titleIsUrl || currTitle.length < 5)) {
+        const titleIsDomain = /^(mp\.weixin\.qq\.com|[a-z0-9.-]+\.[a-z]{2,})$/i.test(currTitle);
+        // Firecrawl 的 title 如果是域名（如 mp.weixin.qq.com），不覆盖
+        const fcTitleIsDomain = fc.title && /^(mp\.weixin\.qq\.com|[a-z0-9.-]+\.[a-z]{2,})$/i.test(fc.title.trim());
+        if (fc.title && !fcTitleIsDomain && (!currTitle || titleIsUrl || titleIsDomain || currTitle.length < 5)) {
           item.title = fc.title;
+        }
+        // 如果 title 还是域名/空，从 markdown 提取标题
+        if ((!item.title || titleIsDomain || /^(mp\.weixin\.qq\.com|[a-z0-9.-]+\.[a-z]{2,})$/i.test(String(item.title).trim())) && markdown) {
+          const lines = markdown.split(/\n+/).map(s => s.trim()).filter(s => s && !s.startsWith("!"));
+          // 优先找 # 标题行（微信文章结构：第一行是作者名，第二行 # 才是标题）
+          const headingLine = lines.find(s => /^#{1,3}\s+/.test(s) && s.replace(/^#+\s*/, "").length > 3);
+          if (headingLine) {
+            item.title = headingLine.replace(/^#+\s*/, "").slice(0, 100);
+            // 微信文章 # 标题行之前的第一行通常是公众号名（作者）
+            const idx = lines.indexOf(headingLine);
+            if (idx > 0 && !item.author) {
+              const possibleAuthor = lines[idx - 1];
+              if (possibleAuthor.length > 1 && possibleAuthor.length < 30 && !/^#{1,3}\s/.test(possibleAuthor)) {
+                item.author = possibleAuthor;
+              }
+            }
+          } else {
+            // 没有 # 标题，取第一行有意义的文本（跳过纯域名/作者行）
+            const firstMeaningful = lines.find(s => s.length > 5 && !/^(mp\.weixin\.qq\.com|[a-z0-9.-]+\.[a-z]{2,})$/i.test(s));
+            if (firstMeaningful) {
+              item.title = firstMeaningful.slice(0, 100);
+            }
+          }
+        }
+        // 清洗 title：如果是 [xxx](url) markdown 链接格式，提取 xxx
+        const titleStr = String(item.title || "").trim();
+        const mdLinkMatch = titleStr.match(/^\[([^\]]{5,})\]\(https?:\/\/[^)]+\)$/);
+        if (mdLinkMatch) {
+          item.title = mdLinkMatch[1].trim().slice(0, 100);
         }
       } else {
         fetchStatus = `firecrawl_fail:${fc.error || "empty"}`;
@@ -576,7 +1083,7 @@ export async function fetchArticleIfNeeded(item, env = {}) {
       markdown = jinaResult.markdown;
       fetchStatus = (fetchStatus ? fetchStatus + " | " : "") + jinaResult.status;
       fetcher = "jina";
-      if (jinaResult.title && (!item.title || item.title === url || item.title.length < 5)) {
+      if (jinaResult.title && (!item.title || item.title === url || /^(mp\.weixin\.qq\.com|[a-z0-9.-]+\.[a-z]{2,})$/i.test(String(item.title).trim()) || item.title.length < 5)) {
         item.title = jinaResult.title;
       }
     } else {
@@ -585,11 +1092,20 @@ export async function fetchArticleIfNeeded(item, env = {}) {
   }
 
   const totalDuration = Date.now() - startTime;
-  item._jina_status = fetchStatus; // 保持字段名兼容监控台，实际是"fetch_status"
+  // 保留 TikHub 失败信息作为前缀，方便排查
+  const tikhubFailInfo = item._jina_status && item._jina_status.startsWith("tikhub_fail") ? item._jina_status + " | " : "";
+  item._jina_status = tikhubFailInfo + fetchStatus; // 保持字段名兼容监控台，实际是"fetch_status"
   item._fetcher = fetcher;
 
   if (!markdown || markdown.length < 100) {
     console.log(`[Fetch] ❌ 全部抓取失败 (${totalDuration}ms)`);
+    // 兜底：如果 Chrome 插件抓到了正文，用它
+    if (text.length > 100) {
+      console.log(`[Fetch] 🆘 用浏览器已有正文兜底 (${text.length} chars)`);
+      item._jina_status = (fetchStatus || "") + "|fallback_browser_text";
+      item._quality = "fallback_browser";
+      return;
+    }
     item._quality = "fetch_failed";
     return;
   }
@@ -641,84 +1157,340 @@ export async function fetchArticleIfNeeded(item, env = {}) {
   }
 }
 
-// ========== 🎬 TikHub · B站视频结构化抓取 ==========
-// 命中 bilibili.com / b23.tv 时优先走 TikHub 官方 API 化接口
-// 免费额度覆盖，不消耗 Firecrawl credit
-// 返回：{ ok, title, author, published_at, cover_url, view_count, duration_sec,
-//        bvid, aid, canonical_url, markdown, error, duration }
-async function fetchFromTikhubBilibili(url, env) {
-  const start = Date.now();
-  if (!env.TIKHUB_API_KEY) {
-    return { ok: false, error: "TIKHUB_API_KEY missing" };
+// ========== TikHub 提取已改为 import ./extractor/index.js ==========
+// 🤖 图片识别（Cloudflare Workers AI - Llama 3.2 Vision）
+// 从 Markdown 中提取图片 URL，逐张识别，结果追加到 Markdown 末尾
+// ============ 火山引擎 V4 签名 ============
+async function hmacSha256(key, data) {
+  const enc = new TextEncoder();
+  const keyData = typeof key === "string" ? enc.encode(key) : key;
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  return crypto.subtle.sign("HMAC", cryptoKey, enc.encode(data));
+}
+
+async function sha256Hex(data) {
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest("SHA-256", enc.encode(data));
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function bufToHex(buf) {
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function volcSignV4(method, url, body, ak, sk) {
+  const urlObj = new URL(url);
+  const now = new Date();
+  const xDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const shortDate = xDate.substring(0, 8);
+  const region = "cn-north-1";
+  const service = "cv";
+
+  const params = new URLSearchParams(urlObj.search);
+  const sortedParams = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const canonicalQueryString = sortedParams.map(([k, v]) =>
+    encodeURIComponent(k) + "=" + encodeURIComponent(v)
+  ).join("&");
+
+  const host = urlObj.host;
+  const canonicalHeaders = `content-type:application/x-www-form-urlencoded\nhost:${host}\nx-date:${xDate}\n`;
+  const signedHeaders = "content-type;host;x-date";
+  const hashedPayload = await sha256Hex(body);
+  const canonicalRequest = `${method.toUpperCase()}\n/\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${hashedPayload}`;
+
+  const credentialScope = `${shortDate}/${region}/${service}/request`;
+  const hashedCanonicalRequest = await sha256Hex(canonicalRequest);
+  const stringToSign = `HMAC-SHA256\n${xDate}\n${credentialScope}\n${hashedCanonicalRequest}`;
+
+  const kDate = await hmacSha256(sk, shortDate);
+  const kRegion = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, service);
+  const kSigning = await hmacSha256(kService, "request");
+  const signature = await hmacSha256(kSigning, stringToSign);
+
+  return `HMAC-SHA256 Credential=${ak}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${bufToHex(signature)}`;
+}
+
+// ============ 火山引擎通用文字识别 OCR ============
+async function callVolcOCR(base64, ak, sk) {
+  const url = "https://visual.volcengineapi.com/?Action=OCRNormal&Version=2020-08-26";
+  const body = `image_base64=${encodeURIComponent(base64)}`;
+  const auth = await volcSignV4("POST", url, body, ak, sk);
+  const xDate = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Date": xDate,
+      "Authorization": auth,
+    },
+    body: body,
+  });
+
+  const data = await resp.json();
+  if (data.code === 10000 && data.data?.line_texts) {
+    return data.data.line_texts.join("\n");
   }
-  try {
-    // b23.tv 短链先 302 拿真链（TikHub 也支持短链，但 explicit 更稳）
-    let target = url;
-    if (/(^|\/\/)b23\.tv\//i.test(url)) {
-      try {
-        const r = await fetch(url, {
-          method: "GET",
-          redirect: "manual",
-          headers: { "User-Agent": "Mozilla/5.0" },
-        });
-        const loc = r.headers.get("location");
-        if (loc) target = loc;
-      } catch (e) {
-        console.log("[TikHub-B站] 短链解析失败:", e.message);
+  throw new Error(`OCR code=${data.code} msg=${data.message || JSON.stringify(data).slice(0, 200)}`);
+}
+
+// ============ 图片内容识别（OCR）============
+async function enhanceWithVisionAI(markdown, env, maxImages = 20) {
+  // 提取图片 URL
+  const imgUrls = [];
+  const allUrls = markdown.match(/https?:\/\/[^\s\)\]"']+/gi) || [];
+  for (const u of allUrls) {
+    if (/\.(?:jpg|jpeg|png|webp|gif|jfif|avif)/i.test(u) ||
+        /(zhimg\.com|sns-img|rednotecdn|xhscdn|mmbiz\.qpic\.cn)/i.test(u) ||
+        /(imageView2|format\/webp|format\/png|format\/jpg)/i.test(u)) {
+      imgUrls.push(u);
+    }
+  }
+
+  const unique = [...new Set(imgUrls)].slice(0, maxImages);
+  if (unique.length === 0) return markdown;
+
+  // 检查是否有 OCR 密钥
+  if (!env.VOLC_ACCESS_KEY || !env.VOLC_SECRET_KEY) {
+    console.log("[OCR] 缺少 VOLC_ACCESS_KEY/VOLC_SECRET_KEY，跳过图片识别");
+    return markdown;
+  }
+
+  console.log(`[OCR] 发现 ${imgUrls.length} 张图片，识别前 ${unique.length} 张（串行，避免QPS超限）`);
+
+  // 串行识别（火山OCR免费QPS=1，不能并发）
+  const results = [];
+  for (let i = 0; i < unique.length; i++) {
+    const imgUrl = unique[i];
+    try {
+      const imgResp = await fetch(imgUrl, {
+        headers: { "Referer": "https://www.zhihu.com" }
+      });
+      if (!imgResp.ok) {
+        console.log(`[OCR] 图片 ${i + 1} 下载失败: ${imgResp.status}`);
+        results.push({ url: imgUrl, text: `[图片下载失败: HTTP ${imgResp.status}]`, model: "none" });
+        continue;
+      }
+      const buf = await imgResp.arrayBuffer();
+      if (buf.byteLength > 8 * 1024 * 1024) {
+        console.log(`[OCR] 图片 ${i + 1} 太大 (${buf.byteLength} bytes)，跳过`);
+        results.push({ url: imgUrl, text: `[图片过大，跳过识别]`, model: "none" });
+        continue;
+      }
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let j = 0; j < bytes.length; j += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(j, j + chunkSize));
+      }
+      const base64 = btoa(binary);
+
+      const text = await callVolcOCR(base64, env.VOLC_ACCESS_KEY, env.VOLC_SECRET_KEY);
+      console.log(`[OCR] 图片${i + 1} 识别完成: ${text.length}字`);
+      results.push({ url: imgUrl, text: text.trim(), model: "volc-ocr" });
+    } catch (e) {
+      console.log(`[OCR] 图片 ${i + 1} 识别失败: ${e.message}`);
+      results.push({ url: imgUrl, text: `[识别失败: ${e.message.slice(0, 100)}]`, model: "fail" });
+    }
+  }
+
+  if (results.length === 0) return markdown;
+
+  // 去掉原始的"## 图片"URL列表（OCR已包含内容，URL对AI无意义）
+  let cleaned = markdown.replace(/\n## 图片\n[\s\S]*?(?=\n## |\n$|$)/, "");
+  // 去掉末尾多余的 "- url" 残留
+  cleaned = cleaned.replace(/\n(?:- https?:\/\/[^\n]+\n)+\s*$/, "\n");
+
+  let visionSection = "\n\n## 🖼️ 图片文字提取\n";
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    visionSection += `\n[图${i + 1}]\n${r.text}\n`;
+  }
+
+  return cleaned + visionSection;
+}
+
+// 微信公众号文章 & 视频号 提取（TikHub POST 接口）
+async function fetchWechatArticle(url, env) {
+  const apiUrl = "https://api.tikhub.io/api/v1/wechat_mp/v2/fetch_article_detail";
+  const resp = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.TIKHUB_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url, raw: false }),
+  });
+  if (!resp.ok) throw new Error(`WeChat MP API ${resp.status}`);
+  const body = await resp.json();
+
+  // TikHub 返回结构：body.data.content 可能是 HTML 字符串，也可能是对象（含 title/content_text 等）
+  // 需要兼容两种情况
+  const rawData = body?.data || {};
+  const rawContent = rawData.content;
+
+  let title = "";
+  let author = "";
+  let text = "";
+  let cover = "";
+  let publishedAt = "";
+
+  if (typeof rawContent === "string") {
+    // content 是 HTML 字符串 -- 去标签转纯文本
+    text = rawContent
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, "\n")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    // 从 HTML 里提取 title
+    const titleMatch = rawContent.match(/<title[^>]*>([^<]+)<\/title>/i)
+      || rawContent.match(/<h1[^>]*>([^<]+)<\/h1>/i)
+      || rawContent.match(/<meta[^>]+og:title[^>]+content="([^"]+)"/i);
+    if (titleMatch) title = titleMatch[1].trim();
+    // 从 HTML 里提取作者
+    const authorMatch = rawContent.match(/<meta[^>]+og:article:author[^>]+content="([^"]+)"/i)
+      || rawContent.match(/var\s+nickname\s*=\s*['"]([^'"]+)['"]/i);
+    if (authorMatch) author = authorMatch[1].trim();
+  } else if (rawContent && typeof rawContent === "object") {
+    // content 是对象（旧版 API 格式）
+    const c = rawContent;
+    title = c.title || "";
+    author = c.nick_name || c.author || "";
+    text = c.content_text || c.desc || "";
+    cover = c.cdn_url || "";
+    publishedAt = c.create_time || "";
+  }
+
+  // 如果 TikHub 没返回正文，抛错让上层降级到 Firecrawl
+  if (!text || text.length < 50) {
+    throw new Error(`TikHub 微信接口返回空内容 (content_len=${text.length}, bizUin=${rawData.bizUin})`);
+  }
+
+  // 构建 Markdown
+  let md = `---\ntitle: "${title}"\nsource: "${url}"\nplatform: wechat_mp\nauthor: "${author}"\npublished_at: "${publishedAt}"\ncaptured_at: "${new Date().toISOString()}"\ncontent_type: article\n---\n\n# ${title}\n\n${text}\n`;
+  if (cover) md += `\n## 封面\n\n- ${cover}\n`;
+  return { ok: true, title, author, publishedAt: publishedAt.split(" ")[0] || "", markdown: md };
+}
+
+async function fetchWechatChannels(shareUrl, env) {
+  const apiUrl = "https://api.tikhub.io/api/v1/wechat_channels/v2/fetch_video_detail";
+  const resp = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.TIKHUB_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ share_url: shareUrl, raw: false }),
+  });
+  if (!resp.ok) throw new Error(`WeChat Channels API ${resp.status}`);
+  const body = await resp.json();
+  const d = body?.data || {};
+  const title = d.title || "";
+  const author = d.nickname || "";
+  const desc = d.desc || "";
+  // create_time 是 Unix 秒时间戳
+  const ts = d.create_time;
+  const publishedAt = ts ? new Date(ts * 1000).toISOString() : "";
+  const likeCount = d.like_count || 0;
+  const commentCount = d.comment_count || 0;
+  const forwardCount = d.forward_count || 0;
+  const media = d.media || {};
+  const duration = media.duration || 0;
+  const cover = d.cover_img_url || media.cover_url || "";
+  const videoUrl = media.url || "";
+
+  // 构建带时间戳的 mm:ss 格式
+  const fmtDuration = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  let md = `---\ntitle: "${title}"\nsource: "${shareUrl}"\nplatform: wechat_channels\nauthor: "${author}"\npublished_at: "${publishedAt}"\ncaptured_at: "${new Date().toISOString()}"\ncontent_type: video\nduration_seconds: ${duration}\n---\n\n# ${title}\n\n${desc}\n\n## 视频信息\n\n- **UP主**: ${author}\n- **时长**: ${fmtDuration(duration)}\n- **点赞**: ${likeCount}\n- **评论**: ${commentCount}\n- **转发**: ${forwardCount}\n`;
+  if (cover) md += `\n## 封面\n\n- ${cover}\n`;
+  if (videoUrl) md += `\n## 视频地址\n\n- ${videoUrl}\n`;
+  md += `\n> ⚠️ 视频号视频无字幕接口，仅提取元数据。如需字幕请使用其他方式。\n`;
+  return { ok: true, title, author, published_at: publishedAt.split("T")[0], markdown: md };
+}
+
+// 以下是桥接函数，把 extractor 的返回格式适配成 worker pipeline 期望的格式
+async function fetchFromTikhub(rawUrl, env) {
+  // 从分享文案中提取纯 URL（和 extractor ui.js 的 extractUrl 逻辑一致）
+  const urlMatch = rawUrl.match(/https?:\/\/[^\s；;]+/i);
+  const url = urlMatch ? urlMatch[0].replace(/[。，、!！?？~～]+$/g, "") : rawUrl.trim();
+
+  const extractorEnv = { ...env, TIKHUB_TOKEN: env.TIKHUB_API_KEY };
+
+  // 微信搜索短链 search.weixin.qq.com -> 跟随重定向拿真实 URL
+  let finalUrl = url;
+  if (/search\.weixin\.qq\.com|weixin\.qq\.com\/cgi-bin/i.test(url)) {
+    try {
+      const r = await fetch(url, { redirect: "follow", headers: { "User-Agent": "Mozilla/5.0" } });
+      finalUrl = r.url || url;
+      console.log(`[TikHub] 微信短链重定向: ${url} -> ${finalUrl}`);
+    } catch (e) {
+      console.log(`[TikHub] 微信短链重定向失败: ${e.message}`);
+    }
+  }
+
+  // 微信公众号文章 & 视频号：POST 接口，不走 extractor
+  if (/mp\.weixin\.qq\.com/i.test(finalUrl)) {
+    try {
+      return await fetchWechatArticle(finalUrl, env);
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+  if (/weixin\.qq\.com\/sph\//i.test(url) || /channels\.weixin\.qq\.com/i.test(url)) {
+    try {
+      return await fetchWechatChannels(url, env);
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  const platform = tikhubDetectPlatform(url);
+
+  // TikHub 知乎接口有时返回安全验证页面（非报错，而是返回拦截页内容）
+  // B站字幕也可能需要重试
+  const maxRetries = (platform === "bilibili") ? 2 : (platform === "zhihu" ? 3 : 1);
+  let lastError = "";
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const content = await tikhubExtract(url, platform, extractorEnv);
+      const document = tikhubNormalize(content, url, platform);
+      const markdown = tikhubToMarkdown(document);
+      // 检测 TikHub 返回的是否是拦截页（安全验证/登录墙）
+      const blocked = detectBlockedPage(markdown);
+      if (blocked && attempt < maxRetries) {
+        console.log(`[TikHub] 第${attempt}/${maxRetries}次返回拦截页（${blocked}），等2秒重试`);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      return {
+        ok: true,
+        title: document.title,
+        author: document.author || "",
+        published_at: document.published_at || "",
+        markdown,
+      };
+    } catch (e) {
+      lastError = e.message;
+      // 只有字幕相关的错误才重试
+      if (!lastError.includes("subtitle") && !lastError.includes("no accessible")) {
+        break;
       }
     }
-
-    const api = "https://api.tikhub.io/api/v1/bilibili/web/fetch_one_video_v3?url=" +
-      encodeURIComponent(target);
-    const resp = await fetch(api, {
-      headers: { Authorization: `Bearer ${env.TIKHUB_API_KEY}` },
-    });
-    const duration = Date.now() - start;
-    if (!resp.ok) {
-      return { ok: false, error: `tikhub_http_${resp.status}`, duration };
-    }
-    const body = await resp.json();
-    if (body.code !== 200) {
-      return { ok: false, error: `tikhub_code_${body.code}:${body.message_zh || body.message || "?"}`.slice(0, 200), duration };
-    }
-    const d = body.data || {};
-    if (!d.title && !d.bvid) {
-      return { ok: false, error: "tikhub_empty_data", duration };
-    }
-
-    // 组装成现有 pipeline 期望的 markdown（喂 Coze 用）
-    const mdLines = [
-      `# ${d.title || ""}`,
-      "",
-      `**作者**：${d.owner?.name || "(未知)"}`,
-      `**发布**：${d.pubdate ? new Date(d.pubdate * 1000).toISOString().slice(0, 10) : "?"}`,
-      `**时长**：${d.duration ? `${Math.floor(d.duration / 60)}分${d.duration % 60}秒` : "?"}`,
-      `**播放**：${d.stat?.view ?? "?"}`,
-      `**分区**：${d.tname || d.tname_v2 || ""}`,
-      "",
-      "## 视频简介",
-      "",
-      d.desc || "(UP 主未填写简介)",
-    ];
-    const markdown = mdLines.join("\n");
-
-    return {
-      ok: true,
-      title: d.title || "",
-      author: d.owner?.name || "",
-      published_at: d.pubdate ? new Date(d.pubdate * 1000).toISOString() : "",
-      cover_url: d.pic || "",
-      view_count: d.stat?.view,
-      duration_sec: d.duration,
-      bvid: d.bvid || "",
-      aid: d.aid || "",
-      canonical_url: d.bvid ? `https://www.bilibili.com/video/${d.bvid}` : target,
-      markdown,
-      duration,
-    };
-  } catch (err) {
-    return { ok: false, error: `tikhub_exception:${err.message}`, duration: Date.now() - start };
   }
+  return { ok: false, error: lastError };
 }
 
 // 🆕 Firecrawl 抓取封装
@@ -917,15 +1689,169 @@ async function fetchFromWayback(url) {
   }
 }
 
+// ===== 提示词默认值（可通过 D1 kb_config 表动态覆盖）=====
+const DEFAULT_SYSTEM_PROMPT = (
+  "你必须输出严格的 JSON 格式，不能输出 Markdown、不能输出解释、不能输出代码块。\n"
+  + "输出的 JSON 只能包含这些字段：title, summary, key_points, category, tags, entities, importance, confidence, basis。\n"
+  + "key_points 必须是字符串数组，不能是 markdown 列表。\n\n"
+  + "你是我的个人知识空间整理助手。你负责把用户分享的网页、帖子、视频字幕、截图OCR、ChatGPT对话或文档片段整理成结构化知识条目。"
+  + "你的目标不是写长文章，而是帮助我以后快速回忆、筛选、检索和复用这条信息。\n"
+  + "如果输入是视频字幕（通常没有标点、按句断开），请先在脑海中理解完整叙事，再提炼核心观点，不要被逐句碎片干扰。\n\n"
+  + "你必须严格遵守以下规则：\n"
+  + "1.key_points 绝对不能复制原文句子，必须写成提炼后的结论、判断或价值\n"
+  + "2.key_points 至少 2 条，最多 3 条\n"
+  + "3.summary 不要整段抄原文，要用中文概括\n"
+  + "4.summary 要包含三部分：这条内容讲了什么主题、核心判断或核心方法是什么、对我的工作/方案/客户有什么用或可以怎么复用\n"
+  + "5.summary 普通内容 120-220 字，高价值内容 220-350 字，最长不超过 500 字\n"
+  + "6.importance 是1-5的数字：3=普通收藏有明确知识点，4=值得二次整理可用于工作/方案/客户交流，5=高价值长期参考可沉淀为方法论，一般情况默认从3开始判断\n"
+  + "7.confidence 只能写 高/中/低：高=有完整正文，中=有标题和较充分的选中文本，低=只有标题、链接或极短文本\n"
+  + "8.basis 要写清楚：基于什么信息生成，有没有不足"
+);
+
+const DEFAULT_USER_TEMPLATE = (
+  "标题：{{title}}\n"
+  + "来源平台：{{source_platform}}\n"
+  + "原文内容：{{text}}\n\n"
+  + "输出必须是严格的 JSON 格式，只能包含以下字段，不要输出 Markdown、不要输出解释、不要输出代码块：\n\n"
+  + "{\n"
+  + '  "title": "最终标题，不要带 99+ 封私信这种前缀",\n'
+  + '  "summary": "中文摘要，120-350字，不要复制原文，要提炼主题、核心判断和价值",\n'
+  + '  "key_points": ["提炼后的要点1", "提炼后的要点2", "提炼后的要点3"],\n'
+  + '  "category": "从这些里面选一个：AI技术、云计算与基础设施、软件工程、数据与安全、其他技术、行业研究、商业与金融、效率工具、个人成长、社会与历史、生活、其他",\n'
+  + '  "tags": ["从标签池选3-6个标签", "标签池：大模型、AI Agent、RAG、企业知识库、AI工作流、AI Coding、AI Infra、模型训练、模型推理、多模态、Prompt工程、模型评测、AI应用落地、私有化部署、云计算、云原生、虚拟化、容器、分布式存储、网络架构、高可用、性能优化、软件架构、API集成、自动化脚本、DevOps、开发范式、工程效率、数据治理、数据分析、数据库、大数据、数据隐私、网络安全、身份权限、行业趋势、企业数字化、制造业、智能制造、供应链、港口物流、汽车产业、出海全球化、信创、商业模式、产品策略、客户需求、解决方案、销售方法、竞品分析、项目管理、ROI分析、股票投资、房地产、宏观经济、货币政策、资本市场、行业轮动、国际局势、科技政策、产业政策、历史、个人知识管理、办公自动化、工作流自动化、信息检索、写作表达、学习方法、思维模型、职业发展、菜谱、美食、旅行、健康、运动、家居、其他"],\n'
+  + '  "entities": "具体公司、产品、工具、人物、技术术语，多个用逗号分隔",\n'
+  + '  "importance": "1-5的数字，3是普通收藏，4是值得二次整理，5是高价值长期参考",\n'
+  + '  "confidence": "高/中/低",\n'
+  + '  "basis": "基于选中文本生成，信息完整。"\n'
+  + "}\n\n"
+  + "只输出 JSON，不要其他任何内容。"
+);
+
+// 从 D1 kb_config 表读取提示词，没有则用默认值
+async function loadPromptsFromDB(env) {
+  let system_prompt = DEFAULT_SYSTEM_PROMPT;
+  let user_template = DEFAULT_USER_TEMPLATE;
+  let is_default = true;
+  if (env.kb_logs) {
+    try {
+      const row = await env.kb_logs
+        .prepare("SELECT key, value FROM kb_config WHERE key IN ('system_prompt','user_template')")
+        .all();
+      if (row.results && row.results.length) {
+        for (const r of row.results) {
+          if (r.key === "system_prompt" && r.value) {
+            system_prompt = r.value;
+            is_default = false;
+          }
+          if (r.key === "user_template" && r.value) {
+            user_template = r.value;
+            is_default = false;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[prompt] 读取 kb_config 失败，使用默认值:", e.message);
+    }
+  }
+  return { system_prompt, user_template, is_default };
+}
+
+// D1 中存储的 secret key 名称
+const SECRET_KEYS = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY"];
+
+// 从 D1 加载 secrets，覆盖到 env（D1 优先于 wrangler secret）
+async function loadSecretsFromDB(env) {
+  if (!env.kb_logs) return;
+  try {
+    const rows = await env.kb_logs
+      .prepare(`SELECT key, value FROM kb_config WHERE key IN (${SECRET_KEYS.map(() => "?").join(",")})`)
+      .bind(...SECRET_KEYS)
+      .all();
+    if (rows.results) {
+      for (const r of rows.results) {
+        if (r.value) env[r.key] = r.value;
+      }
+    }
+  } catch (e) {
+    console.warn("[secrets] 读取 kb_config 失败:", e.message);
+  }
+}
+
+// 把 user_template 中的占位符替换为实际内容
+function renderUserTemplate(template, item) {
+  return template
+    .replace(/\{\{title\}\}/g, item.title || "")
+    .replace(/\{\{source_platform\}\}/g, item.source_platform || "")
+    .replace(/\{\{text\}\}/g, (item.text || "").slice(0, 12000));
+}
+
+// 归一化 LLM Base URL：兼容用户填 base 或完整 /chat/completions 两种写法
+// 未配置时返回空串（调用方需报错提示，不提供任何默认供应商）
+function normalizeLLMBaseUrl(value) {
+  const v = String(value || "").trim().replace(/\/+$/, "");
+  if (!v) return "";
+  if (v.endsWith("/chat/completions")) return v;
+  return `${v}/chat/completions`;
+}
+
+// 统一调用 OpenAI 兼容 LLM，带参数降级重试：
+//   1) response_format: {type:"json_object"}  + max_tokens
+//   2) 若 400（供应商不认 response_format/max_tokens），去掉 response_format 重试
+//   3) 若仍 400，改用 max_completion_tokens（OpenAI 新模型）
+// 保证任何声明 OpenAI 兼容的接口都能调通。
+async function callLLM({ llmBaseUrl, llmModel, apiKey, systemPrompt, userContent }) {
+  const base = normalizeLLMBaseUrl(llmBaseUrl);
+  const model = String(llmModel || "").trim();
+  // 不提供默认供应商：缺配置直接抛错，提示用户在配置页填写
+  if (!base) throw new Error("未配置 LLM_BASE_URL，请到「配置部署 → AI 智能分析」填写你的大模型接口地址");
+  if (!model) throw new Error("未配置 LLM_MODEL，请到「配置部署 → AI 智能分析」填写模型名");
+  if (!apiKey) throw new Error("未配置 API Key，请到「配置部署 → AI 智能分析」填写");
+  const headers = {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userContent },
+  ];
+
+  // 第 1 次：完整参数
+  let resp = await fetch(base, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, max_tokens: 4000, temperature: 0.3 }),
+  });
+  if (resp.ok) return resp;
+
+  // 第 2 次：去掉 response_format（部分兼容供应商不认）
+  if (resp.status === 400) {
+    resp = await fetch(base, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, messages, max_tokens: 4000, temperature: 0.3 }),
+    });
+    if (resp.ok) return resp;
+  }
+
+  // 第 3 次：用 max_completion_tokens（OpenAI 新模型废弃了 max_tokens）
+  if (resp.status === 400) {
+    resp = await fetch(base, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, max_completion_tokens: 4000, temperature: 0.3 }),
+    });
+  }
+  return resp;
+}
+
 export async function enrichWithCoze(item, env = {}) {
-  if (!env.COZE_API_KEY || !env.COZE_WORKFLOW_ID) {
-    console.log("[Coze] 跳过Coze调用，缺少API Key或Workflow ID");
+  // 使用 OpenAI 兼容接口的大模型（DeepSeek/OpenAI/通义/豆包等），key 存于 ARK_API_KEY
+  // 未配置 key 时走 fallbackEnrich（不调用 AI）
+  if (!env.ARK_API_KEY) {
+    console.log("[Ark] 跳过Ark调用，缺少ARK_API_KEY");
     return fallbackEnrich(item);
   }
 
-  const startTime = Date.now();
-  // ✅ 只传Coze工作流真正需要的3个字段：AI分析用title+text，IF选择器用source_platform路由
-  // 其他字段（source_url、canonical_url、id、capture_device等）由Worker自己管理，不进Coze
   const cozeInput = {
     title: item.title,
     text: item.text,
@@ -933,48 +1859,62 @@ export async function enrichWithCoze(item, env = {}) {
   };
 
   try {
-    const resp = await fetch(`${env.COZE_BASE_URL || "https://api.coze.com"}/v1/workflow/run`, {
-      method: "POST",
-      headers: {
-        authorization: "Bearer " + env.COZE_API_KEY,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        workflow_id: env.COZE_WORKFLOW_ID,
-        parameters: cozeInput,
-      }),
-    });
+    // 从 D1 读取动态提示词，没有则用默认
+    const { system_prompt: systemPrompt, user_template: userTemplate } = await loadPromptsFromDB(env);
+    const userContent = renderUserTemplate(userTemplate, item);
+
+    const llmBaseUrl = normalizeLLMBaseUrl(env.LLM_BASE_URL);
+    const llmModel = env.LLM_MODEL;
+    const resp = await callLLM({ llmBaseUrl, llmModel, apiKey: env.ARK_API_KEY, systemPrompt, userContent });
 
     const bodyText = await resp.text();
 
     if (!resp.ok) {
       const errorResult = { ...fallbackEnrich(item), coze_status: "failed", coze_error: bodyText.slice(0, 500) };
       errorResult.debug_coze_input = cozeInput;
-      console.error("[Coze] 请求失败，状态码:", resp.status);
+      console.error("[Ark] 请求失败，状态码:", resp.status);
       return errorResult;
     }
 
-    const body = parseMaybeJson(bodyText);
-    const data = extractCozeOutput(body);
+    const body = JSON.parse(bodyText);
+    let content = body?.choices?.[0]?.message?.content || "";
+
+    // 去掉可能的 markdown 代码块包裹
+    if (content.startsWith("```")) {
+      content = content.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+
+    let data = {};
+    if (content) {
+      try {
+        data = JSON.parse(content);
+      } catch (e) {
+        console.error("[Ark] JSON解析失败:", e.message, "content head:", content.slice(0, 100));
+      }
+    }
+
+    // 检查是否有有效字段
+    const hasData = data && (data.title || data.summary || data.tags || data.category || data.key_points);
+    if (!hasData) {
+      console.error("[Ark] 返回内容无有效字段，content_len:", content.length);
+      data = {};
+    }
 
     const result = mergeEnrichment(item, data, "ok");
 
-    // 🆕 把 enriched 里的 author / published_at 也回填到 result（存 D1 供监控台查看）
     result.debug_final_author = result.author;
     result.debug_final_published_at = result.published_at;
-
-    // ✅ 把调试信息放在result里，接口会直接返回
     result.debug_coze_input = cozeInput;
     result.debug_coze_parsed = data;
-    result.debug_coze_raw_body = body;  // 🔍 Coze API返回的原始结构，用来诊断解析问题
+    result.debug_coze_raw_body = { model: body?.model, usage: body?.usage, finish_reason: body?.choices?.[0]?.finish_reason };
 
-    console.log("[Coze] 处理完成，分类:", data.category, "置信度:", data.confidence, "标签数:", data.tags?.length || 0);
+    console.log("[Ark] 处理完成，分类:", data.category, "置信度:", data.confidence, "标签数:", data.tags?.length || 0);
 
     return result;
   } catch (error) {
     const errorResult = { ...fallbackEnrich(item), coze_status: "failed", coze_error: error.message };
     errorResult.debug_coze_input = cozeInput;
-    console.error("[Coze] 调用异常:", error.name, error.message);
+    console.error("[Ark] 调用异常:", error.name, error.message);
     return errorResult;
   }
 }
@@ -1171,9 +2111,6 @@ export async function retrieveDify(query, topK, env = {}) {
 }
 
 function authorize(request, env) {
-  // 临时跳过Token校验，先跑通流程
-  return { ok: true };
-  
   if (!env.INGEST_TOKEN) return { ok: true };
   const auth = request.headers.get("authorization") || "";
   const apiKey = request.headers.get("x-api-key") || "";
@@ -1358,41 +2295,6 @@ function normalizeImportance(value) {
 function normalizeConfidence(value) {
   const v = stringOrEmpty(value).trim();
   return ["高", "中", "低"].includes(v) ? v : "中";
-}
-
-function extractCozeOutput(body = {}) {
-  // Coze v1 workflow 输出是两层嵌套的JSON字符串：
-  // body.data → 第一层JSON字符串 → data.output → 第二层JSON字符串 → 真正的结构化数据
-  // 先把所有候选的字符串都解析成对象
-  const candidates = [
-    body?.data,
-    body?.output,
-    body?.result,
-    // 特殊处理两层嵌套的情况：先解析 body.data，再解析里面的 .output
-    parseMaybeJson(body?.data)?.output,
-    parseMaybeJson(body?.data)?.result,
-    parseMaybeJson(body?.data)?.content,
-    body?.data?.output,
-    body?.data?.result,
-    body?.data?.content,
-    body,
-  ];
-  for (const candidate of candidates) {
-    const parsed = parseMaybeJson(candidate);
-    if (parsed && typeof parsed === "object" && hasEnrichmentFields(parsed)) return parsed;
-  }
-  return {};
-}
-
-function hasEnrichmentFields(value) {
-  return Boolean(value && typeof value === "object" && (
-    value.title || value.summary || value.tags || value.category || value.key_points || value.keyPoints
-  ));
-}
-
-function parseMaybeJson(value) {
-  if (typeof value !== "string") return value || {};
-  try { return JSON.parse(value); } catch { return { summary: value }; }
 }
 
 async function safeJson(resp) {
@@ -1758,4 +2660,38 @@ function cryptoRandomId() {
     for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   }
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * 📱 Bark 推送通知：收录完成后推送到 iPhone
+ * 用法：sendBarkNotification("key", result)
+ */
+async function sendBarkNotification(barkKey, result) {
+  try {
+    const title = result.title || "未知内容";
+    const category = result.category || "未分类";
+    const platform = result.source_platform || "";
+    const cozeOk = result.coze_status === "ok";
+    const notionOk = result.notion_status === "created";
+    const notionUrl = result.notion_page_url || "";
+
+    // 推送标题
+    const pushTitle = notionOk ? "✅ 已收录" : "⚠️ 收录异常";
+    // 推送内容
+    let body = `${title}`;
+    if (platform) body += `\n📱 ${platform}`;
+    body += `\n🏷️ ${category}`;
+    if (cozeOk) body += `\n🤖 AI分析完成`;
+    else if (result.coze_status === "failed") body += `\n🤖 AI分析失败`;
+    if (notionOk) body += `\n📝 Notion已创建`;
+    if (result.jina_status) body += `\n🔗 ${result.jina_status}`;
+
+    const url = `https://api.day.app/${barkKey}/${encodeURIComponent(pushTitle)}/${encodeURIComponent(body)}?group=知识库&icon=https://emojicdn.elk.sh/📚`;
+
+    const resp = await fetch(url, { method: "GET" });
+    console.log(`[Bark] 推送结果: ${resp.status}`);
+    return resp.status;
+  } catch (e) {
+    console.error(`[Bark] 推送失败: ${e.message}`);
+  }
 }

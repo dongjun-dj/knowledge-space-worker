@@ -22,18 +22,17 @@
     #pendingBadge.show { display: inline-block; }
     .row-split { display: flex; gap: 8px; margin-top: 8px; }
     .row-split button { flex: 1; }
+    .links { display: flex; gap: 6px; justify-content: center; margin-top: 10px; font-size: 12px; }
+    .links a { color: #4f46e5; text-decoration: none; cursor: pointer; }
+    .links a:hover { text-decoration: underline; }
+    .links span { color: #d0d5dd; }
   </style>
 </head>
 <body>
   <h1>收录到知识库</h1>
   <div id="page" class="hint">正在读取当前页面...</div>
   <button id="save">收录当前页/选中文本</button>
-  <div class="row-split">
-    <button id="openQueue" class="secondary">
-      📱 待处理队列<span id="pendingBadge">0</span>
-    </button>
-    <button id="openAdmin" class="secondary">📊 监控台</button>
-  </div>
+  <button id="openAdmin" class="secondary">📊 监控台</button>
   <div class="hint">首次使用请先打开 <a id="options" href="#">插件设置</a> 填写 Token。</div>
   <div id="status"></div>
   <script src="popup.js"></script>

@@ -1,172 +1,176 @@
-# Knowledge Space Worker
+# 📚 知识空间 Worker
 
-这是一套 `Notion + Coze + Dify + Cloudflare Worker` 的个人在线知识空间入口服务。
+一个自动化内容收录工具：发送一条链接 → 自动提取正文 → AI 生成摘要/分类/标签 → 写入 Notion 知识库 → 推送通知到手机。
 
-## 已实现能力
+## 工作流程
 
-- `GET /health`：健康检查。
-- `POST /ingest`：接收手机/电脑分享内容，调用 Coze 做结构化摘要，写入 Notion，并同步到 Dify 知识库。
-- `GET /search?q=...&top_k=5`：调用 Dify 知识库检索，返回稳定 JSON，供 Hermes/Codex/本地脚本调用。
-- 未配置 Coze 时，会自动 fallback：根据标题/文本生成基础摘要、分类和标签，保证链路不中断。
+```
+用户发送链接 → Cloudflare Worker → 内容提取 → AI 分析 → 写入 Notion → 推送通知
+```
 
-## 目录
+- **电脑端**：Chrome 插件一键收录当前页面/选中文本，完成后弹 macOS 系统通知
+- **手机端**：iOS 快捷指令，复制链接后从分享菜单收录，完成后 Bark 推送通知
 
-```text
+## 部署指南
+
+### 前置条件
+
+1. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
+2. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
+3. 登录 Cloudflare：`npx wrangler login`（会弹出浏览器授权）
+
+### ① 获取代码
+
+```bash
+git clone <项目地址> knowledge-space-worker
+cd knowledge-space-worker
+```
+
+或直接下载 ZIP 解压。
+
+### ② 创建 D1 数据库
+
+```bash
+npx wrangler d1 create kb-logs
+```
+
+执行后会打印 `database_id`，**复制保存好**，下一步要用。
+
+### ③ 创建消息队列
+
+```bash
+npx wrangler queues create ingest-tasks
+```
+
+### ④ 修改配置文件
+
+用文本编辑器打开项目根目录的 `wrangler.toml`，把 `database_id` 的值换成第②步你自己的 ID：
+
+```toml
+[[d1_databases]]
+binding = "kb_logs"
+database_name = "kb-logs"
+database_id = "你刚才复制的 ID"
+```
+
+### ⑤ 初始化数据库表
+
+```bash
+npx wrangler d1 execute kb-logs --file=schema.sql
+npx wrangler d1 execute kb-logs --file=schema-async.sql
+```
+
+看到 `Executed` 字样说明建表成功。
+
+### ⑥ 生成令牌并部署
+
+一条命令搞定 -- 自动生成随机令牌、设到云端、部署代码：
+
+```bash
+unset HTTPS_PROXY HTTP_PROXY ALL_PROXY && TOKEN=$(openssl rand -hex 16) && printf "$TOKEN" | npx wrangler secret put INGEST_TOKEN && URL=$(npx wrangler deploy 2>&1 | tee /dev/stderr | grep -o 'https://[^ ]*workers\.dev' | head -1) && echo "" && echo "✅ 部署完成！" && echo "📋 访问地址: $URL/admin?token=$TOKEN" && echo "🔑 令牌: $TOKEN"
+```
+
+> ⚠️ **请妥善保存打印的令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新生成。
+
+### ⑦ 打开配置页面
+
+部署成功后终端会打印访问地址，在浏览器打开：
+
+```
+https://<你的Worker域名>.workers.dev/admin?token=<上面打印的令牌>
+```
+
+在配置页面按步骤完成各服务的 Key 配置即可。
+
+---
+
+## 配置说明
+
+打开配置页面后，按顺序完成 5 步配置：
+
+| 步骤 | 配置项 | 说明 |
+|------|--------|------|
+| 1 | 内容提取 | TikHub（知乎/小红书/B站/公众号）、Firecrawl（通用兜底）、火山引擎 OCR（小红书图片） |
+| 2 | AI 分析 | 支持 OpenAI 兼容接口的大模型（火山引擎豆包/DeepSeek/OpenAI 等） |
+| 3 | 写入知识库 | Notion 数据库（需提前创建集成和数据库） |
+| 4 | 推送通知 | Bark 推送（仅手机端需要，电脑端 Chrome 插件自带通知） |
+| 5 | 安装客户端 | Chrome 插件 + iOS 快捷指令 |
+
+### Notion 数据库准备
+
+在配置页面的第 3 步之前，需要先在 Notion 做好准备：
+
+1. 打开 [notion.so/profile/integrations](https://www.notion.so/profile/integrations)，创建一个内部集成，获取 Token
+2. 在 Notion 新建一个数据库（表格视图），添加以下属性（列）：
+
+   | 属性名 | 类型 |
+   |--------|------|
+   | Title | 标题 |
+   | Summary | 文本 |
+   | Key Points | 文本 |
+   | Category | 单选 |
+   | Tags | 多选 |
+   | Source URL | URL |
+   | Source Platform | 单选 |
+   | Content Type | 单选 |
+   | Author | 文本 |
+   | Importance | 数字 |
+   | Confidence | 单选 |
+   | Entities | 文本 |
+   | Basis | 文本 |
+   | Privacy | 单选 |
+   | Captured At | 日期 |
+   | Published At | 日期 |
+
+3. 把数据库分享给刚才创建的集成（数据库右上角 `···` → Connections → 添加集成）
+4. 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是
+
+### iOS 快捷指令配置
+
+1. 打开「快捷指令」App，新建一个快捷指令
+2. 添加操作「获取剪贴板」
+3. 添加操作「URL」，填入 `https://<你的Worker域名>/ingest`
+4. 添加操作「获取 URL 内容」，方法改为 **POST**
+5. 添加两个请求头：
+   - `Content-Type: application/json`
+   - `Authorization: Bearer <你的令牌>`
+6. 请求体改为 JSON，填入：`{"url":"[[剪贴板]]"}`
+7. 保存快捷指令，可添加到分享菜单
+
+### Chrome 插件配置
+
+1. 打开 `chrome://extensions/`，开启右上角「开发者模式」
+2. 点「加载已解压的扩展程序」，选中项目的 `chrome-extension/` 目录
+3. 点击插件图标 → 设置 → 填入 Worker URL 和 Token
+4. 在 macOS 系统设置 → 通知 → Google Chrome 中允许通知（否则收录完成后不会弹通知）
+
+## 项目结构
+
+```
 knowledge-space-worker/
-  src/worker.js                 # Cloudflare Worker 主程序
-  test/worker.test.js           # 自动化测试
-  wrangler.toml                 # Cloudflare Worker 配置
-  package.json
-  .env.example                  # 环境变量示例
-  docs/
-    notion-database.md          # Notion 数据库字段
-    coze-workflow.md            # Coze 工作流设计
-    dify-setup.md               # Dify 设置
-    share-entrypoints.md        # 手机/电脑一键分享入口
-  scripts/
-    kb_search.py                # 本地 Hermes/Codex 可调用检索脚本
+├── src/
+│   ├── worker.js          # Worker 主代码
+│   └── admin.html.js      # 配置页面
+├── chrome-extension/       # Chrome 插件
+│   ├── manifest.json
+│   ├── popup.html
+│   └── popup.js
+├── schema.sql             # D1 日志表结构
+├── schema-async.sql       # D1 异步任务表结构
+└── wrangler.toml          # Cloudflare 配置
 ```
 
-## 本地测试
+## 技术栈
 
-```bash
-cd /Users/dj/knowledge-space-worker
-source ~/.nvm/nvm.sh
-nvm use 20
-npm install
-npm test
-```
+- **Cloudflare Workers** — Serverless 运行时
+- **Cloudflare D1** — SQLite 数据库（日志和配置存储）
+- **Cloudflare Queues** — 异步任务队列
+- **TikHub / Firecrawl** — 内容提取
+- **火山引擎 OCR** — 小红书图片文字识别
+- **OpenAI 兼容 LLM** — AI 摘要/分类/标签
+- **Notion API** — 知识库写入
+- **Bark** — iOS 推送通知
 
-当前测试结果：`7 passed`。
+## License
 
-## 部署前需要准备
-
-### 1. Cloudflare
-
-- 登录 Cloudflare。
-- 安装 Wrangler：本项目已通过 `npx wrangler` 使用。
-- 登录：
-
-```bash
-cd /Users/dj/knowledge-space-worker
-source ~/.nvm/nvm.sh
-nvm use 20
-npx wrangler login
-```
-
-### 2. Notion
-
-你需要：
-
-- `NOTION_API_KEY`
-- `NOTION_DATABASE_ID`
-
-Notion 数据库字段见：`docs/notion-database.md`。
-
-### 3. Coze
-
-你需要：
-
-- `COZE_API_KEY`
-- `COZE_WORKFLOW_ID`
-- 如果使用国内扣子：配置 `COZE_BASE_URL=https://api.coze.cn`
-- 如果使用海外 Coze：通常为 `https://api.coze.com`
-
-工作流输出 schema 见：`docs/coze-workflow.md`。
-
-### 4. Dify
-
-你需要：
-
-- `DIFY_API_KEY`
-- `DIFY_DATASET_ID`
-- 如果是自建 Dify：配置 `DIFY_BASE_URL`
-
-Dify 设置见：`docs/dify-setup.md`。
-
-## 设置 Cloudflare Worker Secrets
-
-```bash
-cd /Users/dj/knowledge-space-worker
-source ~/.nvm/nvm.sh
-nvm use 20
-
-npx wrangler secret put INGEST_TOKEN
-npx wrangler secret put NOTION_API_KEY
-npx wrangler secret put NOTION_DATABASE_ID
-npx wrangler secret put COZE_API_KEY
-npx wrangler secret put COZE_WORKFLOW_ID
-npx wrangler secret put COZE_BASE_URL
-npx wrangler secret put DIFY_API_KEY
-npx wrangler secret put DIFY_DATASET_ID
-npx wrangler secret put DIFY_BASE_URL
-```
-
-说明：
-
-- `INGEST_TOKEN` 是你自己设置的一串密钥，手机/Chrome/Hermes 调用接口时都要带上。
-- 如果暂时不用 Coze，可以不设置 Coze 变量，系统会 fallback。
-- 如果暂时不用 Dify，可以不设置 Dify 变量，但 `/search` 会返回空结果。
-
-## 部署
-
-```bash
-cd /Users/dj/knowledge-space-worker
-source ~/.nvm/nvm.sh
-nvm use 20
-npx wrangler deploy
-```
-
-部署成功后会得到类似：
-
-```text
-https://knowledge-space-worker.<your-subdomain>.workers.dev
-```
-
-## 验证接口
-
-### 健康检查
-
-```bash
-curl "https://你的-worker-url/health"
-```
-
-### 收录测试
-
-```bash
-curl -X POST "https://你的-worker-url/ingest" \
-  -H "Authorization: Bearer 你的_INGEST_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source_url": "https://example.com/article/1",
-    "title": "AI Agent 个人知识库测试",
-    "text": "这是一条测试内容，讲如何用 RAG 和 Agent 构建个人知识库。",
-    "source_platform": "网页",
-    "capture_device": "curl",
-    "privacy": "personal"
-  }'
-```
-
-### 检索测试
-
-```bash
-curl "https://你的-worker-url/search?q=AI%20Agent&top_k=5" \
-  -H "Authorization: Bearer 你的_INGEST_TOKEN"
-```
-
-## 给 Hermes/Codex 使用
-
-配置本地环境变量：
-
-```bash
-export KB_API_BASE="https://你的-worker-url"
-export KB_API_TOKEN="你的_INGEST_TOKEN"
-```
-
-执行：
-
-```bash
-python3 /Users/dj/knowledge-space-worker/scripts/kb_search.py "AI Agent 知识库"
-```
-
-返回 Markdown 格式检索结果，适合直接喂给 Hermes/Codex。
+MIT

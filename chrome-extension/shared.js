@@ -66,12 +66,14 @@ export function buildIngestPayload({ tab = {}, selectionText = "", captureMode =
 }
 
 export function buildAuthHeaders(ingestToken = "") {
-  // Chrome Service Worker的fetch有超级傻逼的坑：
-  // header里只要有任何非纯ASCII的字符，就会静默卡住，没有任何错误日志！
-  // 所以我们这里只保留最基础的Content-Type，其他所有header全删掉！
-  return {
+  // INGEST_TOKEN 是 UUID/纯ASCII，可以安全放入 header
+  const headers = {
     "Content-Type": "application/json; charset=utf-8",
   };
+  if (ingestToken) {
+    headers["Authorization"] = `Bearer ${ingestToken}`;
+  }
+  return headers;
 }
 
 export function normalizeIngestToken(value = "") {
