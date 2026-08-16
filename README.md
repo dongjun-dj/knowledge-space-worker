@@ -44,22 +44,28 @@ npx wrangler queues create ingest-tasks
 
 ### ④ 把数据库 ID 写进配置文件
 
-不用打开文件改，用一条命令自动替换（把下面命令里的 **你的数据库ID** 换成第②步打印的那一串）：
+先把你复制的数据库 ID 填给一个变量（**把 `你的数据库ID` 原样换成第②步打印的那一串，不要加引号**）：
 
 ```bash
-sed -i "" "s|database_id = \"[^\"]*\"|database_id = \"你的数据库ID\"|" wrangler.toml
+DBID="你的数据库ID"
 ```
 
-> macOS 用 `sed -i ""`（如上）；Linux 把 `""` 去掉，用 `sed -i`。
+然后执行这条命令，它会自动把 ID 替换进配置文件，你**不用手工打开文件改**：
 
-改完可以打开文件检查一下（macOS/Linux 通用）：
+```bash
+sed -i "" "s|database_id = \"[^\"]*\"|database_id = \"$DBID\"|" wrangler.toml
+```
+
+> macOS 用 `sed -i ""`（如上）；Linux 系统把 `""` 删掉，写成 `sed -i`。
+
+改完打开文件确认 `database_id` 是你自己的 ID（不是原来的默认值）：
 
 ```bash
 open wrangler.toml        # macOS
 nano wrangler.toml        # Linux / 或任意编辑器
 ```
 
-确认 `database_id` 是你自己的那串 ID 即可。
+> ⚠️ 只需替换 `DBID` 里的 `你的数据库ID` 这几个字。命令里的 `\"` 和 `$DBID` 都是固定语法，**不要改动**。
 
 ### ⑤ 初始化数据库表
 
