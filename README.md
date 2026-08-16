@@ -31,18 +31,14 @@
 git clone https://github.com/dongjun-dj/knowledge-space-worker.git
 ```
 
-这会创建一个 `knowledge-space-worker` 文件夹。然后进入项目目录：
+这会创建一个 `knowledge-space-worker` 文件夹。
+
+**第 2 步 · 进入目录并一键部署**
+
+进入项目目录并执行脚本：
 
 ```bash
-cd knowledge-space-worker
-```
-
-**第 2 步 · 一键部署**
-
-在项目目录里执行脚本：
-
-```bash
-bash scripts/setup.sh
+cd knowledge-space-worker && bash scripts/setup.sh
 ```
 
 脚本会自动建库、写配置、建队列、建表、部署、生成令牌。跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
