@@ -22,7 +22,7 @@
 ### ① 获取代码
 
 ```bash
-git clone <项目地址> knowledge-space-worker
+git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-space-worker
 cd knowledge-space-worker
 ```
 
