@@ -6,3 +6,4 @@ node_modules
 wrangler_tail.log
 wrangler_tail.pid
 docs/
+.secrets.local
