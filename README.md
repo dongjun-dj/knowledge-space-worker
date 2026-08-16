@@ -13,19 +13,12 @@
 
 ## 部署指南
 
-> ⚠️ **重要：Windows 用户请用 Git Bash，不要用 PowerShell**
->
-> 下面的命令是 bash 语法，在 Windows 的 **PowerShell 里会直接报错**（如 `&&` 不是有效分隔符、`bash` 命令不存在）。**Windows 用户请务必用 Git Bash 运行**。
->
-> 还没装 Git Bash？安装 [Git for Windows](https://git-scm.com/download/win)（安装时一路默认即可）就自带 Git Bash。装好后在开始菜单搜索并打开 **Git Bash**（窗口标题是 `MINGW64`，提示符是 `$` 而不是 `PS>`），再进行下面的操作。
->
-> macOS / Linux 用户直接用系统自带的终端即可，无需额外操作。
-
 ### 前置条件（只需做一次）
 
 1. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
 2. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
 3. 登录 Cloudflare：`npx wrangler login`（会弹出浏览器授权）
+4. **Windows 用户**：请用 [Git for Windows](https://git-scm.com/download/win) 自带的 **Git Bash** 运行下面的命令，**不要用 PowerShell**（`&&`、`bash` 等在 PowerShell 里会报错）。装好后开始菜单打开 Git Bash（窗口标题 `MINGW64`，提示符 `$`）。macOS / Linux 用户用系统自带终端即可。
 
 ### 🚀 一键部署
 
@@ -60,12 +53,6 @@ cd knowledge-space-worker && bash scripts/setup.sh
 > ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
 >
 > 💡 只需部署一次。以后想更新代码，进入目录执行 `git pull` 再 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
-
-### 🖥️ 平台说明
-
-- **macOS / Linux**：直接用系统自带的终端执行上面的命令，脚本会自动适配。
-- **Windows**：用顶部提示的 Git Bash 执行（不要用 PowerShell）。装 [Git for Windows](https://git-scm.com/download/win) 即可获得 Git Bash。也可用 WSL 的 Linux 终端（视为 Linux 平台）。
-- 脚本会自动识别系统（macOS / Linux / Windows），`sed` 等命令用法差异已内置处理，无需手动适配。
 
 ### 🎯 打开配置页面
 
