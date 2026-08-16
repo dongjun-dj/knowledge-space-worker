@@ -26,7 +26,13 @@
 
 **第 1 步 · 获取代码**
 
-把项目克隆到本地（也可直接下载 ZIP 解压）：
+任选一种方式：
+
+**方式 A · 下载 ZIP（国内网络更稳，推荐）**
+
+在 [GitHub 项目页](https://github.com/dongjun-dj/knowledge-space-worker) 点绿色的 **Code → Download ZIP**，下载后解压。解压会得到一个 `knowledge-space-worker-main` 文件夹。
+
+**方式 B · git clone（需能稳定直连 GitHub）**
 
 ```bash
 git clone https://github.com/dongjun-dj/knowledge-space-worker.git
@@ -34,9 +40,17 @@ git clone https://github.com/dongjun-dj/knowledge-space-worker.git
 
 这会创建一个 `knowledge-space-worker` 文件夹。
 
+> 💡 两种方式得到的文件夹名**不一样**（ZIP 是 `-main`，clone 没有）。请以你的实际文件夹名为准。
+
 **第 2 步 · 进入目录并一键部署**
 
-进入项目目录并执行脚本：
+进入你上面解压/克隆出来的那个文件夹（这里以 ZIP 的文件夹名为例）：
+
+```bash
+cd knowledge-space-worker-main && bash scripts/setup.sh
+```
+
+如果你用的是 clone 方式，则进入 `knowledge-space-worker` 文件夹：
 
 ```bash
 cd knowledge-space-worker && bash scripts/setup.sh
