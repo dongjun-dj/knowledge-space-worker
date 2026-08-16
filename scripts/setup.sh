@@ -117,8 +117,16 @@ if npx wrangler secret list 2>&1 | grep -q 'INGEST_TOKEN'; then
   info "开始部署…"
 else
   info "首次部署，生成访问令牌…"
-  TOKEN="$(openssl rand -hex 16)"
-  printf '%s' "$TOKEN" | npx wrangler secret put INGEST_TOKEN >/dev/null 2>&1 && ok "新令牌已写入 Cloudflare" || fail "令牌设置失败"
+  # 用 node 生成随机令牌（跨平台稳定，避免 Windows 上 openssl 差异）
+  TOKEN="$(node -e 'console.log(require("crypto").randomBytes(16).toString("hex"))')"
+  if [ -z "$TOKEN" ]; then
+    fail "生成令牌失败（node 未输出）。请确认 Node.js 安装正常。"
+  fi
+  if printf '%s' "$TOKEN" | npx wrangler secret put INGEST_TOKEN; then
+    ok "新令牌已写入 Cloudflare"
+  else
+    fail "令牌设置失败，请手动执行：printf '$TOKEN' | npx wrangler secret put INGEST_TOKEN"
+  fi
 fi
 
 DEPLOY_OUT="$(npx wrangler deploy 2>&1)"
