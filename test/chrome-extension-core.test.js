@@ -59,7 +59,7 @@ test("buildFeedbackState uses notification plus badge, not result window", () =>
 });
 
 test("normalizeWorkerBaseUrl removes trailing slashes and /ingest suffix", () => {
-  assert.equal(normalizeWorkerBaseUrl("https://knowledge-space-worker.dj-knowledge.workers.dev/ingest/"), "https://knowledge-space-worker.dj-knowledge.workers.dev");
+  assert.equal(normalizeWorkerBaseUrl("https://example-worker.example.workers.dev/ingest/"), "https://example-worker.example.workers.dev");
   assert.equal(normalizeWorkerBaseUrl(" https://example.com/// "), "https://example.com");
 });
 
@@ -106,7 +106,7 @@ test("normalizeIngestToken accepts raw token or Bearer-prefixed token", () => {
 test("postToWorker sends both Authorization and X-API-Key headers", async () => {
   const calls = [];
   const result = await postToWorker({
-    workerBaseUrl: "https://knowledge-space-worker.dj-knowledge.workers.dev/ingest/",
+    workerBaseUrl: "https://example-worker.example.workers.dev/ingest/",
     ingestToken: "Bearer abc123",
     payload: { title: "测试" },
     fetchImpl: async (url, init) => {
@@ -115,7 +115,7 @@ test("postToWorker sends both Authorization and X-API-Key headers", async () => 
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(calls[0].url, "https://knowledge-space-worker.dj-knowledge.workers.dev/ingest");
+  assert.equal(calls[0].url, "https://example-worker.example.workers.dev/ingest");
   assert.equal(calls[0].init.headers.Authorization, "Bearer abc123");
   assert.equal(calls[0].init.headers["X-API-Key"], "abc123");
   assert.equal(calls[0].init.headers["Content-Type"], "application/json");

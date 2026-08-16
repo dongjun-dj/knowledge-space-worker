@@ -1647,7 +1647,7 @@ async function fetchFromWayback(url) {
     // 1. 查最新可用快照
     const availabilityUrl = `https://archive.org/wayback/available?url=${encodeURIComponent(url)}`;
     const availResp = await fetch(availabilityUrl, {
-      headers: { "User-Agent": "kb.dongjun.tech/1.0" },
+      headers: { "User-Agent": "knowledge-space-worker/1.0" },
     });
     if (!availResp.ok) {
       console.log("[Wayback] availability API 失败:", availResp.status);

@@ -3,7 +3,7 @@ import { NOTIFICATION_ICON_PATH, buildFeedbackState, buildIngestPayload, buildNo
 console.log("🚀 background.js 启动了！Service Worker 已加载");
 
 const DEFAULT_OPTIONS = {
-  workerBaseUrl: "https://kb.dongjun.tech",
+  workerBaseUrl: "",
   ingestToken: "",
 };
 

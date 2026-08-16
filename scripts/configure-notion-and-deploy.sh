@@ -32,11 +32,11 @@ npx wrangler deploy
 
 echo
 echo "完成。线上地址："
-echo "https://knowledge-space-worker.dj-knowledge.workers.dev"
+echo "https://<你的worker域名>.workers.dev"
 echo
-echo "请用下面命令测试（把 <INGEST_TOKEN> 替换为上面打印的值）："
+echo "请用下面命令测试（把 <INGEST_TOKEN> 替换为上面打印的值，把地址替换为你的实际地址）："
 cat <<'CMD'
-curl -sS -X POST "https://knowledge-space-worker.dj-knowledge.workers.dev/ingest" \
+curl -sS -X POST "https://<你的worker域名>.workers.dev/ingest" \
   -H "Authorization: Bearer <INGEST_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{

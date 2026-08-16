@@ -22,10 +22,10 @@
 ## 配置
 
 1. 加载插件后，点击「详情」或右键插件图标 →「选项」。
-2. Worker URL 填：
+2. Worker URL 填你部署后得到的访问地址（去掉 `/admin?...` 部分，形如）：
 
 ```text
-https://knowledge-space-worker.dj-knowledge.workers.dev
+https://<你的worker域名>.workers.dev
 ```
 
 3. INGEST_TOKEN 填当前有效 token。

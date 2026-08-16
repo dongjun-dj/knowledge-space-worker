@@ -1,6 +1,6 @@
 import { normalizeIngestToken, normalizeWorkerBaseUrl, postToWorker, validateOptions } from "./shared.js";
 
-const DEFAULT_WORKER = "https://kb.dongjun.tech";
+const DEFAULT_WORKER = "";
 const workerEl = document.querySelector("#workerBaseUrl");
 const tokenEl = document.querySelector("#ingestToken");
 const statusEl = document.querySelector("#status");

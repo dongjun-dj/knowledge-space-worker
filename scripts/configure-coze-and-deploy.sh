@@ -35,6 +35,6 @@ npx wrangler deploy
 
 echo
 echo "完成。线上地址："
-echo "https://knowledge-space-worker.dj-knowledge.workers.dev"
+echo "https://<你的worker域名>.workers.dev"
 echo
 echo "下一步：用 Chrome Bookmarklet 或 iPhone 分享一条新内容，返回中应看到 coze_status: ok。"
