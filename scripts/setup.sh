@@ -20,6 +20,24 @@ cd "$PROJECT_DIR"
 echo "📂 项目目录: $PROJECT_DIR"
 
 # ─────────────────────────────────────────────
+# 0. 平台检测
+# ─────────────────────────────────────────────
+OS="$(uname -s)"
+case "$OS" in
+  Darwin)   PLATFORM="macOS" ;;
+  Linux)    PLATFORM="Linux" ;;
+  MINGW*|MSYS*|CYGWIN*) PLATFORM="Windows(Git Bash)" ;;
+  *)        PLATFORM="未知($OS)" ;;
+esac
+echo "🖥️  运行平台: $PLATFORM"
+# macOS 的 sed 需要 -i ''（BSD sed），Linux 用 -i（GNU sed）
+if [[ "$PLATFORM" == "macOS" ]]; then
+  SED_INLINE=("sed" "-i" "")
+else
+  SED_INLINE=("sed" "-i")
+fi
+
+# ─────────────────────────────────────────────
 # 0. 环境检查
 # ─────────────────────────────────────────────
 command -v node >/dev/null 2>&1 || warn "未检测到 Node.js，请先安装：https://nodejs.org/（须 18+）"
@@ -59,7 +77,7 @@ echo ""
 if grep -q "database_id = \"$DBID\"" wrangler.toml; then
   ok "wrangler.toml 中的 database_id 已是最新，跳过"
 else
-  sed -i '' "s|database_id = \"[^\"]*\"|database_id = \"$DBID\"|" wrangler.toml
+  "${SED_INLINE[@]}" "s|database_id = \"[^\"]*\"|database_id = \"$DBID\"|" wrangler.toml
   ok "已把 database_id 写入 wrangler.toml"
 fi
 
