@@ -13,6 +13,14 @@
 
 ## 部署指南
 
+> ⚠️ **重要：Windows 用户请用 Git Bash，不要用 PowerShell**
+>
+> 下面的命令是 bash 语法，在 Windows 的 **PowerShell 里会直接报错**（如 `&&` 不是有效分隔符、`bash` 命令不存在）。**Windows 用户请务必用 Git Bash 运行**。
+>
+> 还没装 Git Bash？安装 [Git for Windows](https://git-scm.com/download/win)（安装时一路默认即可）就自带 Git Bash。装好后在开始菜单搜索并打开 **Git Bash**（窗口标题是 `MINGW64`，提示符是 `$` 而不是 `PS>`），再进行下面的操作。
+>
+> macOS / Linux 用户直接用系统自带的终端即可，无需额外操作。
+
 ### 前置条件（只需做一次）
 
 1. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
@@ -55,9 +63,9 @@ cd knowledge-space-worker && bash scripts/setup.sh
 
 ### 🖥️ 平台说明
 
-- **macOS / Linux**：直接用系统自带的终端执行上面的命令即可，脚本会自动适配。
-- **Windows**：没有原生 bash。推荐装 [Git for Windows](https://git-scm.com/download/win)（自带 Git Bash），然后在 Git Bash 里执行上面的命令。也可使用 WSL 的 Linux 终端（视为 Linux 平台）。
-- 脚本会自动识别系统（macOS / Linux / Windows），`sed` 等命令用法差异已内置处理，你不需要手动适配。
+- **macOS / Linux**：直接用系统自带的终端执行上面的命令，脚本会自动适配。
+- **Windows**：用顶部提示的 Git Bash 执行（不要用 PowerShell）。装 [Git for Windows](https://git-scm.com/download/win) 即可获得 Git Bash。也可用 WSL 的 Linux 终端（视为 Linux 平台）。
+- 脚本会自动识别系统（macOS / Linux / Windows），`sed` 等命令用法差异已内置处理，无需手动适配。
 
 ### 🎯 打开配置页面
 
