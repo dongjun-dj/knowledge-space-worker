@@ -59,15 +59,20 @@ echo ""
 DB_NAME="kb-logs"
 echo "📦 检查数据库 $DB_NAME …"
 
-DBID="$(npx wrangler d1 info "$DB_NAME" 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || true)"
+DBID="$(npx wrangler d1 list 2>/dev/null | grep "$DB_NAME" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || true)"
 if [ -n "$DBID" ]; then
   ok "数据库已存在，ID: $DBID"
 else
   info "数据库不存在，正在创建…"
-  CREATE_OUT="$(npx wrangler d1 create "$DB_NAME" 2>&1)"
+  CREATE_OUT="$(npx wrangler d1 create "$DB_NAME" 2>&1 || true)"
   DBID="$(echo "$CREATE_OUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || true)"
+  # 若 create 报"已存在"（说明并发建过），则从 list 再取一次 ID
+  if [ -z "$DBID" ] && echo "$CREATE_OUT" | grep -qi 'already exists'; then
+    DBID="$(npx wrangler d1 list 2>/dev/null | grep "$DB_NAME" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || true)"
+    ok "数据库已存在，ID: $DBID"
+  fi
   [ -n "$DBID" ] || fail "创建数据库失败，无法获取 ID。输出：$CREATE_OUT"
-  ok "数据库创建成功，ID: $DBID"
+  [ "$DBID" ] && ok "数据库就绪，ID: $DBID"
 fi
 
 # ─────────────────────────────────────────────
