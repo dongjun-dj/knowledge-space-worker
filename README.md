@@ -40,20 +40,28 @@ git clone https://github.com/dongjun-dj/knowledge-space-worker.git
 
 这会创建一个 `knowledge-space-worker` 文件夹。
 
-> 💡 两种方式得到的文件夹名**不一样**（ZIP 是 `-main`，clone 没有）。请以你的实际文件夹名为准。
+> 💡 两种方式得到的文件夹名**不一样**（ZIP 是 `-main`，clone 没有）。以你上面解压/克隆出来的那个文件夹为准。
 
-**第 2 步 · 进入目录并一键部署**
+**第 2 步 · 进入项目目录**
 
-进入你上面解压/克隆出来的那个文件夹（这里以 ZIP 的文件夹名为例）：
+进入你上面解压/克隆出来的那个文件夹。注意：**用 ZIP 下载的，目录名带 `-main`；用 git clone 的，目录名没有 `-main`**。看你实际是哪个，二选一执行：
 
 ```bash
-cd knowledge-space-worker-main && bash scripts/setup.sh
+# 如果是 ZIP 下载解压的文件夹：
+cd knowledge-space-worker-main
+
+# 如果用的是 git clone（上面方式 B）：
+cd knowledge-space-worker
 ```
 
-如果你用的是 clone 方式，则进入 `knowledge-space-worker` 文件夹：
+（上面两条只执行跟你相符的那一条，不要两条都跑。）
+
+**第 3 步 · 一键部署**
+
+在项目目录里执行脚本：
 
 ```bash
-cd knowledge-space-worker && bash scripts/setup.sh
+bash scripts/setup.sh
 ```
 
 脚本会自动建库、写配置、建队列、建表、部署、生成令牌。跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
