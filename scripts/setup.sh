@@ -48,8 +48,14 @@ npx wrangler --version >/dev/null 2>&1 || fail "未安装 wrangler，请先执�
 # 1. 登录检查（未登录会自动弹出浏览器授权）
 # ─────────────────────────────────────────────
 echo ""
-info "检查 Cloudflare 登录状态（若未登录会弹出浏览器授权）…"
-npx wrangler whoami >/dev/null 2>&1 || fail "登录失败，请手动执行 npx wrangler login"
+info "检查 Cloudflare 登录状态（未登录会自动弹出浏览器授权）…"
+if ! npx wrangler whoami >/dev/null 2>&1; then
+  warn "未登录 Cloudflare，正在打开浏览器让你授权登录…"
+  npx wrangler login || fail "登录失败，请手动执行：npx wrangler login"
+  echo ""
+  info "登录完成，重新确认…"
+  npx wrangler whoami >/dev/null 2>&1 || fail "登录仍未生效，请手动执行：npx wrangler login"
+fi
 ok "Cloudflare 登录正常"
 
 # ─────────────────────────────────────────────
