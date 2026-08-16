@@ -27,7 +27,7 @@ export function renderApp() {
   <section class="card">
     <form id="form">
       <div class="field">
-        <label for="token">访问令牌</label>
+        <label for="token">INGEST_TOKEN</label>
         <input id="token" type="password" autocomplete="off" placeholder="API Token" required>
         <div class="hint">仅保存在当前浏览器会话，关闭标签页后清除。</div>
       </div>

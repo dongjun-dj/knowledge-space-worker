@@ -67,24 +67,27 @@ cd knowledge-space-worker
 bash scripts/setup.sh
 ```
 
-脚本会自动建库、写配置、建队列、建表、部署、生成令牌。跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
+脚本会自动建库、写配置、建队列、建表、部署、生成令牌。跑完会打印部署完成信息，**务必保存其中的 Worker URL 和 INGEST_TOKEN**：
 
 ```
-✅ 部署完成！
-  访问地址:  https://xxx.workers.dev/admin?token=<你的令牌>
-  访问令牌:  <你的令牌>
+✅ 已完成部署！
+
+  Worker URL: https://xxx.workers.dev
+  INGEST_TOKEN: <你的 INGEST_TOKEN>
+
+  请访问: https://xxx.workers.dev/admin?token=<你的 INGEST_TOKEN>  完成后续配置
 ```
 
-> ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
+> ⚠️ **请妥善保存 INGEST_TOKEN**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
 >
 > 💡 只需部署一次。以后想更新代码，进入目录执行 `git pull` 再 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
 
 ### 🎯 打开配置页面
 
-部署成功后，在浏览器打开上面打印的访问地址，按页面步骤完成各服务的 Key 配置即可：
+部署成功后，在浏览器打开上面打印的"请访问"地址，按页面步骤完成各服务的 Key 配置即可：
 
 ```
-https://<你的Worker域名>.workers.dev/admin?token=<上面的访问令牌>
+https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 ```
 
 ---
@@ -146,7 +149,7 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的访问令牌>
 
 1. 打开 `chrome://extensions/`，开启右上角「开发者模式」
 2. 点「加载已解压的扩展程序」，选中项目的 `chrome-extension/` 目录
-3. 点击插件图标 → 设置 → 填入 Worker URL 和 Token
+3. 点击插件图标 → 设置 → 填入 Worker URL 和 INGEST_TOKEN
 4. 在 macOS 系统设置 → 通知 → Google Chrome 中允许通知（否则收录完成后不会弹通知）
 
 ## 项目结构

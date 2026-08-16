@@ -674,7 +674,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <p>⑤ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
-              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer &lt;你的令牌&gt;</code></p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer &lt;你的 INGEST_TOKEN&gt;</code></p>
             </div>
             <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
             <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
@@ -1045,9 +1045,9 @@ function app() {
           // 渠道定义：按收录流程顺序分组
           const channels = [
             {
-              id: "auth", section: "auth", icon: "🔐", title: "收录鉴权", purpose: "Worker 收录接口的访问令牌",
+              id: "auth", section: "auth", icon: "🔐", title: "收录鉴权", purpose: "Worker 收录接口的 INGEST_TOKEN",
               keys: [
-                { name: "INGEST_TOKEN", short: "Token", title: "收录鉴权令牌", hint: "UUID 或 32 位以上随机字母数字。手机/插件/监控台都用它鉴权", url: "https://www.uuidgenerator.net/" },
+                { name: "INGEST_TOKEN", short: "INGEST_TOKEN", title: "收录鉴权 INGEST_TOKEN", hint: "UUID 或 32 位以上随机字母数字。手机/插件/监控台都用它鉴权", url: "https://www.uuidgenerator.net/" },
               ],
             },
             {

@@ -6,7 +6,7 @@
 - 右键菜单：收录选中文本/当前页/链接。
 - 调用线上 Worker `/ingest`，继续走 Coze + Notion。
 - 完成或失败后通过 Chrome 系统通知提示结果；插件图标也会短暂显示 ✓ / ! 角标。
-- Token 保存在 Chrome 本地同步存储，不写死在代码里。
+- INGEST_TOKEN 保存在 Chrome 本地同步存储，不写死在代码里。
 
 ## 安装
 
@@ -22,7 +22,7 @@
 ## 配置
 
 1. 加载插件后，点击「详情」或右键插件图标 →「选项」。
-2. Worker URL 填你部署后得到的访问地址（去掉 `/admin?...` 部分，形如）：
+2. Worker URL 填你部署后得到的地址（去掉 `/admin?...` 部分，形如）：
 
 ```text
 https://<你的worker域名>.workers.dev

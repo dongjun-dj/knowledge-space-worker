@@ -119,10 +119,10 @@ echo ""
 # 只在"从未设置过令牌"时才生成新令牌；已有令牌则保留，避免破坏现有配置
 if npx wrangler secret list 2>&1 | grep -q 'INGEST_TOKEN'; then
   TKN=""
-  warn "检测到已存在访问令牌，保留不重置（避免已有插件/快捷指令失效）。如需重置，请先删除该密钥。"
+  warn "检测到已存在 INGEST_TOKEN，保留不重置（避免已有插件/快捷指令失效）。如需重置，请先删除该密钥。"
   info "开始部署…"
 else
-  info "首次部署，生成访问令牌…"
+  info "首次部署，生成 INGEST_TOKEN…"
   # 用 node 生成随机令牌（跨平台稳定，避免 Windows 上 openssl 差异）
   TKN="$(node -e 'console.log(require("crypto").randomBytes(16).toString("hex"))')"
   if [ -z "$TKN" ]; then
@@ -131,7 +131,7 @@ else
   if printf '%s' "$TKN" | npx wrangler secret put INGEST_TOKEN; then
     ok "新令牌已写入 Cloudflare"
     # 打印并把令牌保存到本地文件（用户随时可读）
-    echo "  🔑 你的访问令牌: $TKN"
+    echo "  🔑 INGEST_TOKEN: $TKN"
     printf "INGEST_TOKEN=%s\n" "$TKN" > .secrets.local
     echo "  📄 已保存到本地文件 .secrets.local（可用 cat .secrets.local 查看）"
   else
@@ -164,8 +164,10 @@ if [ -z "$TKN" ]; then
   echo "══════════════════════════════════════════════════"
   ok "已完成部署！"
   echo ""
-  echo "  请访问:  ${URL}/admin?token=<你保存的令牌>  完成后续配置"
-  echo "  你的令牌: 请查看本地文件 .secrets.local（cat .secrets.local）"
+  echo "  Worker URL: ${URL}"
+  echo "  INGEST_TOKEN: 请查看本地文件 .secrets.local（cat .secrets.local）"
+  echo ""
+  echo "  请访问: ${URL}/admin?token=<你保存的令牌>  完成后续配置"
   echo ""
   warn "请妥善保管令牌，后续登录配置页面、手机快捷指令、Chrome 插件都会用到。"
   echo "══════════════════════════════════════════════════"
@@ -175,10 +177,12 @@ else
   echo "══════════════════════════════════════════════════"
   ok "已完成部署！"
   echo ""
-  echo "  请访问:  ${URL}/admin?token=${TKN}  完成后续配置"
-  echo "  你的令牌为: ${TKN}"
+  echo "  Worker URL: ${URL}"
+  echo "  INGEST_TOKEN: ${TKN}"
   echo ""
-  warn "请妥善保管上面的令牌，后续登录配置页面、手机快捷指令、Chrome 插件都会用到。"
+  echo "  请访问: ${URL}/admin?token=${TKN}  完成后续配置"
+  echo ""
+  warn "请妥善保管令牌，后续登录配置页面、手机快捷指令、Chrome 插件都会用到。"
   echo "══════════════════════════════════════════════════"
   echo ""
 fi
