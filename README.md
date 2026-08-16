@@ -19,15 +19,15 @@
 2. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
 3. 登录 Cloudflare：`npx wrangler login`（会弹出浏览器授权）
 
-### 🚀 一键部署（推荐）
+### 🚀 一键部署
 
-获取代码后，在项目目录执行脚本，**它会自动完成建库、写配置、建队列、建表、部署、生成令牌，全程无需手动操作**：
+在终端粘贴下面这一整条命令，**会自动完成克隆代码、进入项目、建库、写配置、建队列、建表、部署、生成令牌，全程无需手动操作**：
 
 ```bash
-git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-space-worker
-cd knowledge-space-worker
-bash scripts/setup.sh
+git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-space-worker && cd knowledge-space-worker && bash scripts/setup.sh
 ```
+
+> 如果你已经克隆过代码、只想重新部署，进入项目目录后直接执行 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
 
 脚本跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
 
@@ -38,8 +38,6 @@ bash scripts/setup.sh
 ```
 
 > ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
->
-> 💡 脚本是幂等的，可重复运行：已创建的数据库、队列会自动跳过，只有最后的令牌会重新生成。已配置过多套环境也没关系。
 
 ### 🎯 打开配置页面
 
@@ -48,51 +46,6 @@ bash scripts/setup.sh
 ```
 https://<你的Worker域名>.workers.dev/admin?token=<上面的访问令牌>
 ```
-
-### 📖 手动部署（可选，进阶）
-
-如果不想用一键脚本，也可以手动一步步完成。以下每一步对应脚本 `scripts/setup.sh` 里的一个环节：
-
-**① 创建 D1 数据库**
-
-```bash
-npx wrangler d1 create kb-logs
-```
-
-执行后会打印 `database_id`，**复制保存好**。
-
-**② 创建消息队列**
-
-```bash
-npx wrangler queues create ingest-tasks
-```
-
-**③ 把数据库 ID 写进配置文件**
-
-不用手动打开文件，用一条命令自动替换（把 `你的数据库ID` 换成上一步打印的那一串）：
-
-```bash
-DBID="你的数据库ID"
-sed -i "" "s|database_id = \"[^\"]*\"|database_id = \"$DBID\"|" wrangler.toml
-```
-
-> macOS 用 `sed -i ""`；Linux 把 `""` 删掉写成 `sed -i`。
-> 只把 `你的数据库ID` 那几个字换成真实 ID，命令里的 `\"` 和 `$DBID` 是固定语法，不要动。
-
-**④ 初始化数据库表**
-
-```bash
-npx wrangler d1 execute kb-logs --file=schema.sql
-npx wrangler d1 execute kb-logs --file=schema-async.sql
-```
-
-**⑤ 生成令牌并部署**
-
-```bash
-unset HTTPS_PROXY HTTP_PROXY ALL_PROXY && TOKEN=$(openssl rand -hex 16) && printf "$TOKEN" | npx wrangler secret put INGEST_TOKEN && URL=$(npx wrangler deploy 2>&1 | tee /dev/stderr | grep -o 'https://[^ ]*workers\.dev' | head -1) && echo "" && echo "✅ 部署完成！" && echo "📋 访问地址: $URL/admin?token=$TOKEN" && echo "🔑 令牌: $TOKEN"
-```
-
-> ⚠️ **请妥善保存打印的令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新生成。
 
 ---
 
