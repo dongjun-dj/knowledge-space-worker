@@ -21,15 +21,31 @@
 
 ### 🚀 一键部署
 
-在终端粘贴下面这一整条命令，**会自动完成克隆代码、进入项目、建库、写配置、建队列、建表、部署、生成令牌，全程无需手动操作**：
+分两步：**先获取代码，再部署**。脚本会自动完成建库、写配置、建队列、建表、生成令牌，全程无需手动操作。
+
+**第 1 步 · 获取代码**
+
+把项目克隆到本地（也可直接下载 ZIP 解压）：
 
 ```bash
-git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-space-worker && cd knowledge-space-worker && bash scripts/setup.sh
+git clone https://github.com/dongjun-dj/knowledge-space-worker.git
 ```
 
-> 如果你已经克隆过代码、只想重新部署，进入项目目录后直接执行 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
+这会创建一个 `knowledge-space-worker` 文件夹。然后进入项目目录：
 
-脚本跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
+```bash
+cd knowledge-space-worker
+```
+
+**第 2 步 · 一键部署**
+
+在项目目录里执行脚本：
+
+```bash
+bash scripts/setup.sh
+```
+
+脚本会自动建库、写配置、建队列、建表、部署、生成令牌。跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
 
 ```
 ✅ 部署完成！
@@ -38,11 +54,13 @@ git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-spa
 ```
 
 > ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
+>
+> 💡 只需部署一次。以后想更新代码，进入目录执行 `git pull` 再 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
 
 ### 🖥️ 平台说明
 
-- **macOS / Linux**：直接用系统自带的终端执行上面的一键命令即可，脚本会自动适配。
-- **Windows**：没有原生 bash。推荐装 [Git for Windows](https://git-scm.com/download/win)（自带 Git Bash），然后在 Git Bash 里执行上面的一键命令。也可使用 WSL 的 Linux 终端（视为 Linux 平台）。
+- **macOS / Linux**：直接用系统自带的终端执行上面的命令即可，脚本会自动适配。
+- **Windows**：没有原生 bash。推荐装 [Git for Windows](https://git-scm.com/download/win)（自带 Git Bash），然后在 Git Bash 里执行上面的命令。也可使用 WSL 的 Linux 终端（视为 Linux 平台）。
 - 脚本会自动识别系统（macOS / Linux / Windows），`sed` 等命令用法差异已内置处理，你不需要手动适配。
 
 ### 🎯 打开配置页面
