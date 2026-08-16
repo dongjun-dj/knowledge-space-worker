@@ -5,3 +5,4 @@ node_modules
 .DS_Store
 wrangler_tail.log
 wrangler_tail.pid
+docs/

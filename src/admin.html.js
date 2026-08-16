@@ -352,14 +352,13 @@ export const ADMIN_HTML = `<!DOCTYPE html>
 
   <!-- 主内容：配置部署 View -->
   <div x-show="view==='config'" class="max-w-4xl mx-auto px-6 py-6">
-    <div class="mb-6">
-      <h2 class="text-lg font-semibold mb-1">⚙️ 配置部署</h2>
-      <p class="text-sm text-gray-500">按步骤完成部署，每步配置好后点保存即可生效。</p>
-    </div>
 
-    <!-- 生产数据流示意图 -->
+    <!-- 整体流程示意图 -->
+    <div class="mb-6">
+      <h2 class="text-lg font-semibold mb-1">📋 整体流程示意图</h2>
+      <p class="text-sm text-gray-500 mb-3">用户发送一条链接后，系统内部的完整处理过程。</p>
+    </div>
     <div class="mb-6 rounded-xl p-4" style="background: #12121f; border: 1px solid #2a2a4a;">
-      <div class="text-xs text-gray-500 mb-4 text-center">📋 收录数据流：用户发送一条链接后，系统内部的完整处理过程</div>
 
       <div class="flex items-stretch gap-2">
 
@@ -451,6 +450,11 @@ export const ADMIN_HTML = `<!DOCTYPE html>
         </div>
 
       </div>
+    </div>
+
+    <div class="mb-6">
+      <h2 class="text-lg font-semibold mb-1">⚙️ 配置部署</h2>
+      <p class="text-sm text-gray-500">按步骤完成各部分配置，每步配置好后点保存即可生效。</p>
     </div>
 
     <!-- Step 1: 内容提取 -->
@@ -563,7 +567,10 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source URL</code>（URL）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source Platform</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Key Points</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Author</code>（文本）</p>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Importance</code>（数字）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Confidence</code>（单选）</p>
           </div>
-          <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。如需修改字段，在提示词中改输出字段，然后在 Notion 中对应修改列名，总之两边保持一致即可。</p>
+          <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。</p>
+          <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
+            <p class="text-xs text-indigo-300"><b>💡 如需修改字段及字段选项，</b>可在提示词中修改输出的字段，然后在 Notion 中对应修改列名，总之两边保持一致即可。</p>
+          </div>
           <p>③ 把数据库分享给刚才创建的集成：点数据库右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> Connections -> 添加你创建的集成。</p>
           <p>④ 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是。例如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">notion.so/你的工作区/DATABASE_ID?v=...</code>，取 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 前面的那串。</p>
         </div>
