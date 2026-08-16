@@ -18,7 +18,7 @@
 1. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
 2. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
 3. 登录 Cloudflare：`npx wrangler login`（会弹出浏览器授权）
-4. **Windows 用户**：请用 [Git for Windows](https://git-scm.com/download/win) 自带的 **Git Bash** 运行下面的命令，**不要用 PowerShell**（`&&`、`bash` 等在 PowerShell 里会报错）。装好后开始菜单打开 Git Bash（窗口标题 `MINGW64`，提示符 `$`）。macOS / Linux 用户用系统自带终端即可。
+4. **Windows 用户**：请用 [Git for Windows](https://git-scm.com/download/win) 自带的 **Git Bash** 运行下面的命令，**不要用 PowerShell/CMD 等工具**；macOS / Linux 用户用系统自带终端即可。
 
 ### 🚀 一键部署
 
