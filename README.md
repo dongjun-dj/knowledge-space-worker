@@ -39,6 +39,12 @@ git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-spa
 
 > ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
 
+### 🖥️ 平台说明
+
+- **macOS / Linux**：直接用系统自带的终端执行上面的一键命令即可，脚本会自动适配。
+- **Windows**：没有原生 bash。推荐装 [Git for Windows](https://git-scm.com/download/win)（自带 Git Bash），然后在 Git Bash 里执行上面的一键命令。也可使用 WSL 的 Linux 终端（视为 Linux 平台）。
+- 脚本会自动识别系统（macOS / Linux / Windows），`sed` 等命令用法差异已内置处理，你不需要手动适配。
+
 ### 🎯 打开配置页面
 
 部署成功后，在浏览器打开上面打印的访问地址，按页面步骤完成各服务的 Key 配置即可：
