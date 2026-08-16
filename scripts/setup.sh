@@ -84,22 +84,41 @@ echo "🗄️  初始化数据库表…"
 [ -f schema-async.sql ]   && npx wrangler d1 execute "$DB_NAME" --file=schema-async.sql   >/dev/null 2>&1 && ok "异步任务表已就绪"     || warn "schema-async.sql 执行异常"
 
 # ─────────────────────────────────────────────
-# 6. 生成令牌 + 部署
+# 6. 令牌 + 部署
 # ─────────────────────────────────────────────
 echo ""
-info "生成访问令牌并部署…"
-TOKEN="$(openssl rand -hex 16)"
-printf '%s' "$TOKEN" | npx wrangler secret put INGEST_TOKEN >/dev/null 2>&1 && ok "令牌已写入 Cloudflare" || fail "令牌设置失败"
+# 只在"从未设置过令牌"时才生成新令牌；已有令牌则保留，避免破坏现有配置
+if npx wrangler secret list 2>&1 | grep -q 'INGEST_TOKEN'; then
+  TOKEN=""
+  warn "检测到已存在访问令牌，保留不重置（避免已有插件/快捷指令失效）。如需重置，请先删除该密钥。"
+  info "开始部署…"
+else
+  info "首次部署，生成访问令牌…"
+  TOKEN="$(openssl rand -hex 16)"
+  printf '%s' "$TOKEN" | npx wrangler secret put INGEST_TOKEN >/dev/null 2>&1 && ok "新令牌已写入 Cloudflare" || fail "令牌设置失败"
+fi
 
 DEPLOY_OUT="$(npx wrangler deploy 2>&1)"
 URL="$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -1 || true)"
 [ -n "$URL" ] || { echo "$DEPLOY_OUT" >&2; fail "部署失败"; }
 
-echo ""
-echo "══════════════════════════════════════════════════"
-ok "部署完成！"
-echo "  访问地址:  ${URL}/admin?token=${TOKEN}"
-echo "  访问令牌:  ${TOKEN}"
-echo "══════════════════════════════════════════════════"
-echo ""
-warn "请妥善保存上面的访问令牌！后续登录配置页、配置手机快捷指令和 Chrome 插件都要用。丢了只能重新部署生成。"
+# 令牌为空（保留已有密钥时取不到明文），则提示从已有配置获取
+if [ -z "$TOKEN" ]; then
+  echo ""
+  echo "══════════════════════════════════════════════════"
+  ok "部署完成！"
+  echo "  访问地址:  ${URL}/admin"
+  echo "  访问令牌:  (保留原有令牌，请在已有配置中获取)"
+  echo "══════════════════════════════════════════════════"
+  echo ""
+  warn "本次未生成新令牌，继续使用你之前的访问令牌。配置页面 URL：${URL}/admin?token=<你之前保存的令牌>"
+else
+  echo ""
+  echo "══════════════════════════════════════════════════"
+  ok "部署完成！"
+  echo "  访问地址:  ${URL}/admin?token=${TOKEN}"
+  echo "  访问令牌:  ${TOKEN}"
+  echo "══════════════════════════════════════════════════"
+  echo ""
+  warn "请妥善保存上面的访问令牌！后续登录配置页、配置手机快捷指令和 Chrome 插件都要用。丢了只能重新部署生成。"
+fi
