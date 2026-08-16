@@ -34,7 +34,7 @@ cd knowledge-space-worker
 npx wrangler d1 create kb-logs
 ```
 
-执行后会打印 `database_id`，**复制保存好**，下一步要用。
+执行后会打印 `database_id`（形如 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`）。下面统一用 `DBID` 这个变量代指它，**把它存起来后面要用**。建议直接记在记事本里。
 
 ### ③ 创建消息队列
 
@@ -42,16 +42,24 @@ npx wrangler d1 create kb-logs
 npx wrangler queues create ingest-tasks
 ```
 
-### ④ 修改配置文件
+### ④ 把数据库 ID 写进配置文件
 
-用文本编辑器打开项目根目录的 `wrangler.toml`，把 `database_id` 的值换成第②步你自己的 ID：
+不用打开文件改，用一条命令自动替换（把下面命令里的 **你的数据库ID** 换成第②步打印的那一串）：
 
-```toml
-[[d1_databases]]
-binding = "kb_logs"
-database_name = "kb-logs"
-database_id = "你刚才复制的 ID"
+```bash
+sed -i "" "s|database_id = \"[^\"]*\"|database_id = \"你的数据库ID\"|" wrangler.toml
 ```
+
+> macOS 用 `sed -i ""`（如上）；Linux 把 `""` 去掉，用 `sed -i`。
+
+改完可以打开文件检查一下（macOS/Linux 通用）：
+
+```bash
+open wrangler.toml        # macOS
+nano wrangler.toml        # Linux / 或任意编辑器
+```
+
+确认 `database_id` 是你自己的那串 ID 即可。
 
 ### ⑤ 初始化数据库表
 
