@@ -13,88 +13,86 @@
 
 ## 部署指南
 
-### 前置条件
+### 前置条件（只需做一次）
 
 1. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
 2. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
 3. 登录 Cloudflare：`npx wrangler login`（会弹出浏览器授权）
 
-### ① 获取代码
+### 🚀 一键部署（推荐）
+
+获取代码后，在项目目录执行脚本，**它会自动完成建库、写配置、建队列、建表、部署、生成令牌，全程无需手动操作**：
 
 ```bash
 git clone https://github.com/dongjun-dj/knowledge-space-worker.git knowledge-space-worker
 cd knowledge-space-worker
+bash scripts/setup.sh
 ```
 
-或直接下载 ZIP 解压。
+脚本跑完会打印部署完成信息，**务必保存其中的访问地址和访问令牌**：
 
-### ② 创建 D1 数据库
+```
+✅ 部署完成！
+  访问地址:  https://xxx.workers.dev/admin?token=<你的令牌>
+  访问令牌:  <你的令牌>
+```
+
+> ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
+>
+> 💡 脚本是幂等的，可重复运行：已创建的数据库、队列会自动跳过，只有最后的令牌会重新生成。已配置过多套环境也没关系。
+
+### 🎯 打开配置页面
+
+部署成功后，在浏览器打开上面打印的访问地址，按页面步骤完成各服务的 Key 配置即可：
+
+```
+https://<你的Worker域名>.workers.dev/admin?token=<上面的访问令牌>
+```
+
+### 📖 手动部署（可选，进阶）
+
+如果不想用一键脚本，也可以手动一步步完成。以下每一步对应脚本 `scripts/setup.sh` 里的一个环节：
+
+**① 创建 D1 数据库**
 
 ```bash
 npx wrangler d1 create kb-logs
 ```
 
-执行后会打印 `database_id`（形如 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`）。下面统一用 `DBID` 这个变量代指它，**把它存起来后面要用**。建议直接记在记事本里。
+执行后会打印 `database_id`，**复制保存好**。
 
-### ③ 创建消息队列
+**② 创建消息队列**
 
 ```bash
 npx wrangler queues create ingest-tasks
 ```
 
-### ④ 把数据库 ID 写进配置文件
+**③ 把数据库 ID 写进配置文件**
 
-先把你复制的数据库 ID 填给一个变量（**把 `你的数据库ID` 原样换成第②步打印的那一串，不要加引号**）：
+不用手动打开文件，用一条命令自动替换（把 `你的数据库ID` 换成上一步打印的那一串）：
 
 ```bash
 DBID="你的数据库ID"
-```
-
-然后执行这条命令，它会自动把 ID 替换进配置文件，你**不用手工打开文件改**：
-
-```bash
 sed -i "" "s|database_id = \"[^\"]*\"|database_id = \"$DBID\"|" wrangler.toml
 ```
 
-> macOS 用 `sed -i ""`（如上）；Linux 系统把 `""` 删掉，写成 `sed -i`。
+> macOS 用 `sed -i ""`；Linux 把 `""` 删掉写成 `sed -i`。
+> 只把 `你的数据库ID` 那几个字换成真实 ID，命令里的 `\"` 和 `$DBID` 是固定语法，不要动。
 
-改完打开文件确认 `database_id` 是你自己的 ID（不是原来的默认值）：
-
-```bash
-open wrangler.toml        # macOS
-nano wrangler.toml        # Linux / 或任意编辑器
-```
-
-> ⚠️ 只需替换 `DBID` 里的 `你的数据库ID` 这几个字。命令里的 `\"` 和 `$DBID` 都是固定语法，**不要改动**。
-
-### ⑤ 初始化数据库表
+**④ 初始化数据库表**
 
 ```bash
 npx wrangler d1 execute kb-logs --file=schema.sql
 npx wrangler d1 execute kb-logs --file=schema-async.sql
 ```
 
-看到 `Executed` 字样说明建表成功。
-
-### ⑥ 生成令牌并部署
-
-一条命令搞定 -- 自动生成随机令牌、设到云端、部署代码：
+**⑤ 生成令牌并部署**
 
 ```bash
 unset HTTPS_PROXY HTTP_PROXY ALL_PROXY && TOKEN=$(openssl rand -hex 16) && printf "$TOKEN" | npx wrangler secret put INGEST_TOKEN && URL=$(npx wrangler deploy 2>&1 | tee /dev/stderr | grep -o 'https://[^ ]*workers\.dev' | head -1) && echo "" && echo "✅ 部署完成！" && echo "📋 访问地址: $URL/admin?token=$TOKEN" && echo "🔑 令牌: $TOKEN"
 ```
 
 > ⚠️ **请妥善保存打印的令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新生成。
-
-### ⑦ 打开配置页面
-
-部署成功后终端会打印访问地址，在浏览器打开：
-
-```
-https://<你的Worker域名>.workers.dev/admin?token=<上面打印的令牌>
-```
-
-在配置页面按步骤完成各服务的 Key 配置即可。
 
 ---
 
@@ -162,6 +160,8 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面打印的令牌>
 
 ```
 knowledge-space-worker/
+├── scripts/
+│   └── setup.sh           # 一键部署脚本（bash scripts/setup.sh）
 ├── src/
 │   ├── worker.js          # Worker 主代码
 │   └── admin.html.js      # 配置页面
