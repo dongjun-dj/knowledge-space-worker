@@ -144,22 +144,26 @@ URL="$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | he
 [ -n "$URL" ] || { echo "$DEPLOY_OUT" >&2; fail "部署失败"; }
 
 # 令牌为空（保留已有密钥时取不到明文），则提示从已有配置获取
-if [ -z "$TOKEN" ]; then
+if [ -z "$TKN" ]; then
   echo ""
   echo "══════════════════════════════════════════════════"
-  ok "部署完成！"
-  echo "  访问地址:  ${URL}/admin"
-  echo "  访问令牌:  (保留原有令牌，请在已有配置中获取)"
+  ok "已完成部署！"
+  echo ""
+  echo "  请访问:  ${URL}/admin?token=<你保存的令牌>  完成后续配置"
+  echo "  你的令牌: 请查看本地文件 .secrets.local（cat .secrets.local）"
+  echo ""
+  warn "请妥善保管令牌，后续登录配置页面、手机快捷指令、Chrome 插件都会用到。"
   echo "══════════════════════════════════════════════════"
   echo ""
-  warn "本次未生成新令牌，继续使用你之前的访问令牌。配置页面 URL：${URL}/admin?token=<你之前保存的令牌>"
 else
   echo ""
   echo "══════════════════════════════════════════════════"
-  ok "部署完成！"
-  echo "  访问地址:  ${URL}/admin?token=${TOKEN}"
-  echo "  访问令牌:  ${TOKEN}"
+  ok "已完成部署！"
+  echo ""
+  echo "  请访问:  ${URL}/admin?token=${TKN}  完成后续配置"
+  echo "  你的令牌为: ${TKN}"
+  echo ""
+  warn "请妥善保管上面的令牌，后续登录配置页面、手机快捷指令、Chrome 插件都会用到。"
   echo "══════════════════════════════════════════════════"
   echo ""
-  warn "请妥善保存上面的访问令牌！后续登录配置页、配置手机快捷指令和 Chrome 插件都要用。丢了只能重新部署生成。"
 fi
