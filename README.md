@@ -21,6 +21,7 @@
 2. 安装 [Node.js](https://nodejs.org/) 18 以上版本（终端输入 `node -v` 确认）
 3. 安装 Cloudflare 命令行工具：`npm i -g wrangler`
 4. **登录 Cloudflare（部署前必须做一次）**：在终端执行 `npx wrangler login`，**会弹出浏览器窗口**让你登录 Cloudflare 并点击授权按钮。授权完成后回到终端，看到 "Successfully logged in" 之类的提示就说明登录成功了。这一步不做，后面的部署会失败。
+5. **确认已注册 workers.dev 子域名（一个账号只需注册一次）**：登录 [dash.cloudflare.com](https://dash.cloudflare.com) → Workers & Pages，页面右侧或设置里能看到你的子域名（形如 `<名字>.workers.dev`）。如果还没有，按页面提示注册一个。没有子域名会导致部署失败。
 
 ### 🚀 一键部署
 
@@ -77,8 +78,6 @@ bash scripts/setup.sh
 > ⚠️ **请妥善保存访问令牌**，后续登录配置页面、配置手机快捷指令、配置浏览器插件都要用。丢了只能重新部署生成。
 >
 > 💡 只需部署一次。以后想更新代码，进入目录执行 `git pull` 再 `bash scripts/setup.sh` 即可。脚本是幂等的，可重复运行。
->
-> 🏷️ **关于 workers.dev 子域名**：如果你第一次部署时，脚本提示"账号尚未注册 workers.dev 子域名"，说明你的 Cloudflare 账号还没注册过子域名（一个账号只需注册一次）。请按提示在浏览器登录 Cloudflare → Workers & Pages → 设置一个子域名，再重新运行脚本。子域名建议用你的个人/品牌标识（如名字缩写），不要用项目名，因为它是**账号级共用**的。
 
 ### 🎯 打开配置页面
 
