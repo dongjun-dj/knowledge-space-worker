@@ -573,6 +573,11 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       // 如果输入框有值，用输入框的值测试；否则用已配置的 env 值
       const testEnv = { ...env };
       if (body.value && body.value.trim()) testEnv[keyName] = body.value.trim();
+      // 没填 Key 也不能为空，否则发空认证会被 API 误判为"有效"
+      const testVal = testEnv[keyName];
+      if (!testVal || !String(testVal).trim()) {
+        return withCors(json({ ok: false, error: "请先填写 API Key 再测试" }));
+      }
 
       try {
         let message = "";
