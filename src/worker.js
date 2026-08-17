@@ -176,7 +176,8 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
       if (url.pathname === "/ingest" && request.method === "POST") {
         const input = await readJson(request);
-        const requestId = crypto.randomUUID();
+        // requestId 用 cryptoRandomId（有 fallback，不依赖环境是否有 WebCrypto）
+        const requestId = `kb_${Date.now()}_${cryptoRandomId()}`;
 
         // 🖥️ Chrome 插件走同步模式：直接处理完再返回，插件弹系统通知
         // 📱 iOS 走异步队列模式：投递消息后立即返回 202，处理完推 Bark
@@ -525,6 +526,10 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         INGEST_TOKEN: !!env.INGEST_TOKEN,
         VOLC_ACCESS_KEY: !!env.VOLC_ACCESS_KEY,
         VOLC_SECRET_KEY: !!env.VOLC_SECRET_KEY,
+        DIFY_API_KEY: !!env.DIFY_API_KEY,
+        DIFY_BASE_URL: !!env.DIFY_BASE_URL,
+        DIFY_DATASET_ID: !!env.DIFY_DATASET_ID,
+        JINA_API_KEY: !!env.JINA_API_KEY,
       };
       return withCors(json({ ok: true, keys }));
     }
@@ -537,7 +542,7 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       }
       if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
       const body = await readJson(request);
-      const allowed = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY"];
+      const allowed = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "DIFY_API_KEY", "DIFY_BASE_URL", "DIFY_DATASET_ID", "JINA_API_KEY"];
       const saved = [];
       for (const key of allowed) {
         if (key in body && typeof body[key] === "string" && body[key].trim()) {
@@ -652,6 +657,16 @@ export async function handleRequest(request, env = {}, ctx = {}) {
           }
           case "INGEST_TOKEN": {
             message = "令牌格式正确，保存后即可用于鉴权";
+            break;
+          }
+          case "DIFY_API_KEY":
+          case "DIFY_BASE_URL":
+          case "DIFY_DATASET_ID": {
+            message = "Dify 配置已保存，可到「搜索/测试」页面验证检索是否正常";
+            break;
+          }
+          case "JINA_API_KEY": {
+            message = "Jina Key 已保存，抓取通用网页时会自动带上加速";
             break;
           }
           default:
@@ -1166,15 +1181,15 @@ export async function fetchArticleIfNeeded(item, env = {}) {
 async function hmacSha256(key, data) {
   const enc = new TextEncoder();
   const keyData = typeof key === "string" ? enc.encode(key) : key;
-  const cryptoKey = await crypto.subtle.importKey(
+  const cryptoKey = await globalThis.crypto.subtle.importKey(
     "raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
-  return crypto.subtle.sign("HMAC", cryptoKey, enc.encode(data));
+  return globalThis.crypto.subtle.sign("HMAC", cryptoKey, enc.encode(data));
 }
 
 async function sha256Hex(data) {
   const enc = new TextEncoder();
-  const hash = await crypto.subtle.digest("SHA-256", enc.encode(data));
+  const hash = await globalThis.crypto.subtle.digest("SHA-256", enc.encode(data));
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -2007,19 +2022,27 @@ export async function createNotionPage(item, env = {}) {
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
 
   const markdownText = buildPlainTextForRag(item);
-  const resp = await fetch("https://api.notion.com/v1/pages", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.NOTION_API_KEY}`,
-      "content-type": "application/json",
-      "notion-version": env.NOTION_VERSION || "2022-06-28",
-    },
-    body: JSON.stringify({
-      parent: { database_id: env.NOTION_DATABASE_ID },
-      properties,
-      children: notionChildren(item, markdownText),
-    }),
-  });
+  let resp;
+  try {
+    resp = await fetch("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.NOTION_API_KEY}`,
+        "content-type": "application/json",
+        "notion-version": env.NOTION_VERSION || "2022-06-28",
+      },
+      body: JSON.stringify({
+        parent: { database_id: env.NOTION_DATABASE_ID },
+        properties,
+        children: notionChildren(item, markdownText),
+      }),
+    });
+  } catch (networkError) {
+    // 网络错误（Notion 不可达等）：降级为 failed，不让整个收录流程崩溃
+    const result = { status: "failed", error: `Notion 网络错误: ${networkError.message}` };
+    if (item.debug_info) item.debug_info.phase4_notionResult = result;
+    return result;
+  }
 
   const body = await safeJson(resp);
   if (!resp.ok) {
@@ -2042,19 +2065,25 @@ export async function indexDify(item, notion, env = {}) {
 
   const baseUrl = env.DIFY_BASE_URL || "https://api.dify.ai";
   const text = buildPlainTextForRag(item, notion);
-  const resp = await fetch(`${baseUrl}/v1/datasets/${env.DIFY_DATASET_ID}/document/create_by_text`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.DIFY_API_KEY}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      name: item.title,
-      text,
-      indexing_technique: "high_quality",
-      process_rule: { mode: "automatic" },
-    }),
-  });
+  let resp;
+  try {
+    resp = await fetch(`${baseUrl}/v1/datasets/${env.DIFY_DATASET_ID}/document/create_by_text`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.DIFY_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: item.title,
+        text,
+        indexing_technique: "high_quality",
+        process_rule: { mode: "automatic" },
+      }),
+    });
+  } catch (networkError) {
+    // 网络错误：降级为 failed，不让整个收录流程崩溃
+    return { status: "failed", error: `Dify 网络错误: ${networkError.message}` };
+  }
 
   const body = await safeJson(resp);
   if (!resp.ok) {

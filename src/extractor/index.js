@@ -609,16 +609,6 @@ function timestampToIso(value) {
   return new Date(number > 1e12 ? number : number * 1000).toISOString();
 }
 
-function formatTime(seconds) {
-  const total = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return h > 0
-    ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-    : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
 function yamlString(value) {
   return JSON.stringify(String(value).replace(/\r?\n/g, " "));
 }

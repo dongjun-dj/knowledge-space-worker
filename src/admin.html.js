@@ -1091,6 +1091,20 @@ function app() {
                 { name: "BARK_KEY", short: "Key", title: "Bark 推送 Key", hint: "打开 Bark App 可看到", url: "https://apps.apple.com/app/bark/id1623918273" },
               ],
             },
+            {
+              id: "dify", section: "store", icon: "🧠", title: "Dify 知识库（可选）", purpose: "内容写入 Dify 数据集用于 RAG 检索",
+              keys: [
+                { name: "DIFY_API_KEY", short: "API Key", title: "Dify API Key", hint: "在 Dify 控制台「API 访问」获取", url: "https://cloud.dify.ai/" },
+                { name: "DIFY_BASE_URL", short: "Base URL", title: "Dify 服务地址", hint: "自部署填你的地址，官方云填 https://api.dify.ai", url: "" },
+                { name: "DIFY_DATASET_ID", short: "数据集 ID", title: "Dify 数据集 ID", hint: "数据集设置页里的 ID", url: "https://cloud.dify.ai/" },
+              ],
+            },
+            {
+              id: "jina", section: "extract", icon: "⚡", title: "Jina Reader（可选）", purpose: "加速通用网页正文抓取",
+              keys: [
+                { name: "JINA_API_KEY", short: "API Key", title: "Jina API Key", hint: "在 jina.ai 控制台获取（免费 200 QPM）", url: "https://jina.ai/" },
+              ],
+            },
           ];
 
           // 填充配置状态
