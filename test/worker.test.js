@@ -343,3 +343,28 @@ test("validateOptions rejects missing config", () => {
   assert.equal(validateOptions({}).ok, false);
   assert.equal(validateOptions({ workerBaseUrl: "https://x.workers.dev", ingestToken: "t" }).ok, true);
 });
+
+test("/api/test-fetch 强制 Firecrawl 未配 Key 时明确报错", async () => {
+  const req = new Request("https://kb.example.com/api/test-fetch?token=secret", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source_url: "https://example.com", force_fetcher: "firecrawl" }),
+  });
+  const res = await handleRequest(req, { INGEST_TOKEN: "secret", kb_logs: null, TIKHUB_API_KEY: "tk" });
+  const body = await res.json();
+  assert.equal(res.status, 200);  // 接口本身成功
+  assert.equal(body.ok, false);   // 但业务上明确报错
+  assert.match(body.error, /未配置 FIRECRAWL_API_KEY/);
+});
+
+test("/api/test-fetch 强制 OCR 未配火山 Key 时明确报错", async () => {
+  const req = new Request("https://kb.example.com/api/test-fetch?token=secret", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source_url: "https://example.com", force_fetcher: "tikhub_ocr" }),
+  });
+  const res = await handleRequest(req, { INGEST_TOKEN: "secret", kb_logs: null, TIKHUB_API_KEY: "tk" });
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.match(body.error, /火山引擎 OCR/);
+});

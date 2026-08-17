@@ -430,20 +430,22 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
             // 🤖 图片OCR（小红书图文笔记，或强制 OCR 模式）
             const urlForPlatform = item.source_url || input.source_url || "";
-            const needVision = forceOCR || /xiaohongshu\\.com|xhslink/i.test(urlForPlatform);
+            const needVision = forceOCR || /xiaohongshu\\\\.com|xhslink/i.test(urlForPlatform);
             if (item.text.length > 0 && needVision) {
               const beforeLen = item.text.length;
-              // 强制 OCR 模式下识别失败要明确报错（测试页用途就是验证 OCR 渠道）
               const ocrResult = await enhanceWithVisionAI(item.text, env);
               if (ocrResult.length > beforeLen) {
                 item.text = ocrResult;
                 const visionMs = Date.now() - startedAt;
                 item._jina_status += `+vision_${visionMs}ms`;
               } else if (forceOCR) {
-                // 强制 OCR 但没识别出任何图片内容（如没有图片/OCR key 无效被跳过）
-                return withCors(json({ ok: false, error: "强制 OCR 未生效：没有识别到图片内容。请确认链接包含图片、已配置火山引擎 OCR 的 Access Key / Secret Key。" }));
+                // 链接里没有图片：不算错误，结果里体现即可（用户选 OCR 只是想验证渠道可用）
+                item._jina_status += "+vision_skip_no_images";
               }
             }
+          } else if (input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") {
+            // 强制渠道失败：反馈真实错误（不降级、不假装成功）
+            return withCors(json({ ok: false, error: `TikHub 抓取失败: ${tikhubResult.error}` }));
           } else {
             item._jina_status = `tikhub_fail:${tikhubResult.error}`;
             item._fetcher = "tikhub";
@@ -451,6 +453,9 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             item.text = `抓取失败: ${tikhubResult.error}`;
           }
         } catch (e) {
+          if (input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") {
+            return withCors(json({ ok: false, error: `TikHub 抓取异常: ${e.message}` }));
+          }
           item._jina_status = `tikhub_exception:${e.message}`;
           item._fetcher = "tikhub";
           item._quality = "fail";
@@ -467,16 +472,11 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             item._fetcher = "firecrawl";
             item._quality = "ok";
           } else {
-            item._jina_status = `firecrawl_fail:${fc.error}`;
-            item._fetcher = "firecrawl";
-            item._quality = "fail";
-            item.text = `抓取失败: ${fc.error}`;
+            // 强制渠道失败：反馈真实错误
+            return withCors(json({ ok: false, error: `Firecrawl 抓取失败: ${fc.error}` }));
           }
         } catch (e) {
-          item._jina_status = `firecrawl_exception:${e.message}`;
-          item._fetcher = "firecrawl";
-          item._quality = "fail";
-          item.text = `抓取异常: ${e.message}`;
+          return withCors(json({ ok: false, error: `Firecrawl 抓取异常: ${e.message}` }));
         }
       } else if (input.force_fetcher === "jina") {
         // 强制 Jina Reader
@@ -489,16 +489,11 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             item._fetcher = "jina";
             item._quality = "ok";
           } else {
-            item._jina_status = `jina_fail:${jina.status}`;
-            item._fetcher = "jina";
-            item._quality = "fail";
-            item.text = `抓取失败: ${jina.status}`;
+            // 强制渠道失败：反馈真实错误
+            return withCors(json({ ok: false, error: `Jina Reader 抓取失败: ${jina.status}` }));
           }
         } catch (e) {
-          item._jina_status = `jina_exception:${e.message}`;
-          item._fetcher = "jina";
-          item._quality = "fail";
-          item.text = `抓取异常: ${e.message}`;
+          return withCors(json({ ok: false, error: `Jina Reader 抓取异常: ${e.message}` }));
         }
       } else {
         // 自动按优先级
