@@ -1712,7 +1712,7 @@ async function loadPromptsFromDB(env) {
 }
 
 // D1 中存储的 secret key 名称
-const SECRET_KEYS = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY"];
+const SECRET_KEYS = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "DIFY_API_KEY", "DIFY_BASE_URL", "DIFY_DATASET_ID", "JINA_API_KEY"];
 
 // 从 D1 加载 secrets，覆盖到 env（D1 优先于 wrangler secret）
 async function loadSecretsFromDB(env) {

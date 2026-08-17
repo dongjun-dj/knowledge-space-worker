@@ -23,9 +23,9 @@ echo
 read -p "请输入 NOTION_DATABASE_ID: " NOTION_DATABASE_ID
 
 echo "正在写入 Cloudflare Worker Secrets..."
-printf '%s' "$INGEST_TOKEN" | npx wrangler secret put INGEST_TOKEN
-printf '%s' "$NOTION_API_KEY" | npx wrangler secret put NOTION_API_KEY
-printf '%s' "$NOTION_DATABASE_ID" | npx wrangler secret put NOTION_DATABASE_ID
+echo "$INGEST_TOKEN" | npx wrangler secret put INGEST_TOKEN
+echo "$NOTION_API_KEY" | npx wrangler secret put NOTION_API_KEY
+echo "$NOTION_DATABASE_ID" | npx wrangler secret put NOTION_DATABASE_ID
 
 echo "正在重新部署 Worker..."
 npx wrangler deploy

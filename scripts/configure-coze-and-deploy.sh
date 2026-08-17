@@ -26,9 +26,9 @@ if [[ -n "${input_base_url:-}" ]]; then
 fi
 
 echo "正在写入 Cloudflare Worker Secrets..."
-printf '%s' "$COZE_API_KEY" | npx wrangler secret put COZE_API_KEY
-printf '%s' "$COZE_WORKFLOW_ID" | npx wrangler secret put COZE_WORKFLOW_ID
-printf '%s' "$COZE_BASE_URL" | npx wrangler secret put COZE_BASE_URL
+echo "$COZE_API_KEY" | npx wrangler secret put COZE_API_KEY
+echo "$COZE_WORKFLOW_ID" | npx wrangler secret put COZE_WORKFLOW_ID
+echo "$COZE_BASE_URL" | npx wrangler secret put COZE_BASE_URL
 
 echo "正在重新部署 Worker..."
 npx wrangler deploy
