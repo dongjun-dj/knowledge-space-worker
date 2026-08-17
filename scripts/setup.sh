@@ -167,6 +167,7 @@ if [ -z "$TKN" ]; then
   echo ""
   echo "  Worker URL: ${URL}"
   echo "  INGEST_TOKEN: 请查看本地文件 .secrets.local（cat .secrets.local）"
+  echo "  （如文件不存在，可在 Cloudflare 控制台 -> Workers -> Settings -> Variables 查看）"
   echo ""
   echo "  请访问: ${URL}/admin?token=<你保存的令牌>  完成后续配置"
   echo ""
