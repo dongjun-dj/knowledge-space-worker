@@ -410,6 +410,10 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       if (input.force_fetcher === "firecrawl" && !env.FIRECRAWL_API_KEY) {
         return withCors(json({ ok: false, error: "未配置 FIRECRAWL_API_KEY，无法强制使用 Firecrawl。请先在「配置部署」里配置 Firecrawl 的 API Key，或改选「自动」。" }));
       }
+      // 强制 OCR 必须配火山引擎 Key（测试页用途就是验证特定渠道，不能静默跳过）
+      if (input.force_fetcher === "tikhub_ocr" && (!env.VOLC_ACCESS_KEY || !env.VOLC_SECRET_KEY)) {
+        return withCors(json({ ok: false, error: "未配置火山引擎 OCR 的 Access Key / Secret Key，无法强制 OCR。请先在「配置部署」里配置，或改选「强制 TikHub」。" }));
+      }
       if ((input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") && env.TIKHUB_API_KEY) {
         const forceOCR = input.force_fetcher === "tikhub_ocr";
         try {
@@ -426,17 +430,18 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
             // 🤖 图片OCR（小红书图文笔记，或强制 OCR 模式）
             const urlForPlatform = item.source_url || input.source_url || "";
-            const needVision = forceOCR || /xiaohongshu\.com|xhslink/i.test(urlForPlatform);
+            const needVision = forceOCR || /xiaohongshu\\.com|xhslink/i.test(urlForPlatform);
             if (item.text.length > 0 && needVision) {
-              try {
-                const beforeLen = item.text.length;
-                item.text = await enhanceWithVisionAI(item.text, env);
-                if (item.text.length > beforeLen) {
-                  const visionMs = Date.now() - startedAt;
-                  item._jina_status += `+vision_${visionMs}ms`;
-                }
-              } catch (e) {
-                item._jina_status += `+vision_err:${e.message.slice(0, 80)}`;
+              const beforeLen = item.text.length;
+              // 强制 OCR 模式下识别失败要明确报错（测试页用途就是验证 OCR 渠道）
+              const ocrResult = await enhanceWithVisionAI(item.text, env);
+              if (ocrResult.length > beforeLen) {
+                item.text = ocrResult;
+                const visionMs = Date.now() - startedAt;
+                item._jina_status += `+vision_${visionMs}ms`;
+              } else if (forceOCR) {
+                // 强制 OCR 但没识别出任何图片内容（如没有图片/OCR key 无效被跳过）
+                return withCors(json({ ok: false, error: "强制 OCR 未生效：没有识别到图片内容。请确认链接包含图片、已配置火山引擎 OCR 的 Access Key / Secret Key。" }));
               }
             }
           } else {
