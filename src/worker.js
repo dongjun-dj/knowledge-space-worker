@@ -306,56 +306,7 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       return withCors(json({ ok: true, logs: results, stats: stats.results }));
     }
 
-    // 🆕 待收录队列 API
-    // GET /api/queue?token=xxx → 拉队列（默认 pending）
-    if (url.pathname === "/api/queue" && request.method === "GET") {
-      const token = url.searchParams.get("token") || "";
-      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
-        return withCors(json({ ok: false, error: "unauthorized" }, 401));
-      }
-      if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
-      const status = url.searchParams.get("status") || "pending";
-      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
-      const { results } = await env.kb_logs.prepare(
-        `SELECT * FROM pending_queue WHERE status = ? ORDER BY id DESC LIMIT ?`
-      ).bind(status, limit).all();
-      const stats = await env.kb_logs.prepare(
-        "SELECT status, COUNT(*) as cnt FROM pending_queue GROUP BY status"
-      ).all();
-      return withCors(json({ ok: true, queue: results, stats: stats.results }));
-    }
-
-    // POST /api/queue/consume { id, notion_page_id } → 标记已消费
-    if (url.pathname === "/api/queue/consume" && request.method === "POST") {
-      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
-      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
-        return withCors(json({ ok: false, error: "unauthorized" }, 401));
-      }
-      const body = await readJson(request);
-      const id = parseInt(body.id, 10);
-      if (!id) return withCors(json({ ok: false, error: "missing id" }, 400));
-      await env.kb_logs.prepare(
-        `UPDATE pending_queue SET status='consumed', consumed_at=?, notion_page_id=? WHERE id=?`
-      ).bind(new Date().toISOString(), body.notion_page_id || null, id).run();
-      return withCors(json({ ok: true }));
-    }
-
-    // POST /api/queue/abandon { id } → 放弃这条
-    if (url.pathname === "/api/queue/abandon" && request.method === "POST") {
-      const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
-      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
-        return withCors(json({ ok: false, error: "unauthorized" }, 401));
-      }
-      const body = await readJson(request);
-      const id = parseInt(body.id, 10);
-      if (!id) return withCors(json({ ok: false, error: "missing id" }, 400));
-      await env.kb_logs.prepare(
-        `UPDATE pending_queue SET status='abandoned' WHERE id=?`
-      ).bind(id).run();
-      return withCors(json({ ok: true }));
-    }
-
-    // POST /api/logs/clear -> 清空所有日志（ingest_logs + async_tasks + pending_queue）
+    // POST /api/logs/clear -> 清空所有日志（ingest_logs + async_tasks）
     if (url.pathname === "/api/logs/clear" && request.method === "POST") {
       const token = url.searchParams.get("token") || request.headers.get("x-token") || "";
       if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
@@ -364,7 +315,6 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
       await env.kb_logs.prepare(`DELETE FROM ingest_logs`).run();
       await env.kb_logs.prepare(`DELETE FROM async_tasks`).run();
-      await env.kb_logs.prepare(`DELETE FROM pending_queue`).run();
       return withCors(json({ ok: true, message: "所有日志已清空" }));
     }
 
