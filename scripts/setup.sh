@@ -98,7 +98,8 @@ fi
 echo ""
 QUEUE="ingest-tasks"
 echo "📨 检查消息队列 $QUEUE …"
-if npx wrangler queues list 2>/dev/null | grep -q "$QUEUE"; then
+QUEUE_LIST="$(npx wrangler queues list 2>/dev/null || true)"
+if echo "$QUEUE_LIST" | grep -q "$QUEUE"; then
   ok "队列已存在，跳过"
 else
   npx wrangler queues create "$QUEUE" >/dev/null 2>&1 && ok "队列创建成功" || warn "队列创建失败（可能已存在），继续"
@@ -108,17 +109,18 @@ fi
 # 5. 初始化数据库表（幂等，重复执行无副作用）
 # ─────────────────────────────────────────────
 echo ""
-echo "🗄️  初始化数据库表…"
-[ -f schema.sql ]         && npx wrangler d1 execute "$DB_NAME" --file=schema.sql         >/dev/null 2>&1 && ok "日志表已就绪"         || warn "schema.sql 执行异常"
-[ -f schema-async.sql ]   && npx wrangler d1 execute "$DB_NAME" --file=schema-async.sql   >/dev/null 2>&1 && ok "异步任务表已就绪"     || warn "schema-async.sql 执行异常"
-[ -f schema-config.sql ]  && npx wrangler d1 execute "$DB_NAME" --file=schema-config.sql  >/dev/null 2>&1 && ok "配置表已就绪"         || warn "schema-config.sql 执行异常"
+echo "🗄️  初始化数据库表（写入远程 D1）…"
+[ -f schema.sql ]         && npx wrangler d1 execute "$DB_NAME" --remote --file=schema.sql         >/dev/null 2>&1 && ok "日志表已就绪"         || warn "schema.sql 执行异常"
+[ -f schema-async.sql ]   && npx wrangler d1 execute "$DB_NAME" --remote --file=schema-async.sql   >/dev/null 2>&1 && ok "异步任务表已就绪"     || warn "schema-async.sql 执行异常"
+[ -f schema-config.sql ]  && npx wrangler d1 execute "$DB_NAME" --remote --file=schema-config.sql  >/dev/null 2>&1 && ok "配置表已就绪"         || warn "schema-config.sql 执行异常"
 
 # ─────────────────────────────────────────────
 # 6. 令牌 + 部署
 # ─────────────────────────────────────────────
 echo ""
 # 只在"从未设置过令牌"时才生成新令牌；已有令牌则保留，避免破坏现有配置
-if npx wrangler secret list 2>&1 | grep -q 'INGEST_TOKEN'; then
+SECRET_LIST="$(npx wrangler secret list 2>&1 || true)"
+if echo "$SECRET_LIST" | grep -q 'INGEST_TOKEN'; then
   TKN=""
   warn "检测到已存在 INGEST_TOKEN，保留不重置（避免已有插件/快捷指令失效）。如需重置，请先删除该密钥。"
   info "开始部署…"
@@ -129,14 +131,14 @@ else
   if [ -z "$TKN" ]; then
     fail "生成令牌失败（node 未输出）。请确认 Node.js 安装正常。"
   fi
-  if printf '%s' "$TKN" | npx wrangler secret put INGEST_TOKEN; then
+  if echo "$TKN" | npx wrangler secret put INGEST_TOKEN 2>&1; then
     ok "新令牌已写入 Cloudflare"
     # 打印并把令牌保存到本地文件（用户随时可读）
     echo "  🔑 INGEST_TOKEN: $TKN"
     printf "INGEST_TOKEN=%s\n" "$TKN" > .secrets.local
     echo "  📄 已保存到本地文件 .secrets.local（可用 cat .secrets.local 查看）"
   else
-    fail "令牌设置失败，请手动执行：printf '$TKN' | npx wrangler secret put INGEST_TOKEN"
+    fail "令牌设置失败，请手动执行：echo '$TKN' | npx wrangler secret put INGEST_TOKEN"
   fi
 fi
 
