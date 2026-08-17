@@ -176,6 +176,13 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
       if (url.pathname === "/ingest" && request.method === "POST") {
         const input = await readJson(request);
+        // 校验：必须至少提供 url/source_url 或 text 之一，空提交直接 400
+        const hasUrl = typeof input?.source_url === "string" && input.source_url.trim()
+          || typeof input?.url === "string" && input.url.trim();
+        const hasText = typeof input?.text === "string" && input.text.trim();
+        if (!hasUrl && !hasText) {
+          return withCors(json({ ok: false, error: "缺少必要字段：请提供 source_url 或 text" }, 400));
+        }
         // requestId 用 cryptoRandomId（有 fallback，不依赖环境是否有 WebCrypto）
         const requestId = `kb_${Date.now()}_${cryptoRandomId()}`;
 
@@ -588,7 +595,7 @@ export async function handleRequest(request, env = {}, ctx = {}) {
           }
           case "TIKHUB_API_KEY": {
             // 用 webhook 端点验证 key 有效性
-            const r = await fetch("https://api.tikhub.io/api/v1/tikhub/webhook", { headers: { Authorization: `Bearer ${testEnv.TIKHUB_API_KEY}` } });
+            const r = await fetchWithTimeout("https://api.tikhub.io/api/v1/tikhub/webhook", { headers: { Authorization: `Bearer ${testEnv.TIKHUB_API_KEY}` } });
             if (r.status === 401 || r.status === 403) { const t = await r.text(); return withCors(json({ ok: false, error: `TikHub 认证失败 (${r.status})` })); }
             else if (r.ok || r.status === 404 || r.status === 405) message = "TikHub Key 有效";
             else { const t = await r.text(); return withCors(json({ ok: false, error: `TikHub 返回 ${r.status}` })); }
@@ -596,27 +603,27 @@ export async function handleRequest(request, env = {}, ctx = {}) {
           }
           case "FIRECRAWL_API_KEY": {
             // Firecrawl v0 端点
-            const r = await fetch("https://api.firecrawl.dev/v0/credit-usage", { headers: { Authorization: `Bearer ${testEnv.FIRECRAWL_API_KEY}` } });
+            const r = await fetchWithTimeout("https://api.firecrawl.dev/v0/credit-usage", { headers: { Authorization: `Bearer ${testEnv.FIRECRAWL_API_KEY}` } });
             if (r.ok) { const d = await r.json(); message = `Firecrawl 连通正常，剩余额度: ${d.data?.remaining_credits ?? "未知"}`; }
             else if (r.status === 401) return withCors(json({ ok: false, error: "Firecrawl 认证失败" }));
             else message = `Firecrawl 返回 ${r.status}（Key 可能有效）`;
             break;
           }
           case "NOTION_API_KEY": {
-            const r = await fetch("https://api.notion.com/v1/users/me", { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
+            const r = await fetchWithTimeout("https://api.notion.com/v1/users/me", { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
             if (r.ok) { const d = await r.json(); message = `Notion 连通正常，机器人: ${d.name || "未知"}`; }
             else { const t = await r.text(); return withCors(json({ ok: false, error: `Notion 返回 ${r.status}: ${t.slice(0, 100)}` })); }
             break;
           }
           case "NOTION_DATABASE_ID": {
             if (!testEnv.NOTION_API_KEY) return withCors(json({ ok: false, error: "需要先配置 NOTION_API_KEY" }));
-            const r = await fetch(`https://api.notion.com/v1/databases/${testEnv.NOTION_DATABASE_ID}`, { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
+            const r = await fetchWithTimeout(`https://api.notion.com/v1/databases/${testEnv.NOTION_DATABASE_ID}`, { headers: { "Authorization": `Bearer ${testEnv.NOTION_API_KEY}`, "Notion-Version": "2022-06-28" } });
             if (r.ok) { const d = await r.json(); message = `数据库可访问: ${d.title?.[0]?.plain_text || "无标题"}`; }
             else { const t = await r.text(); return withCors(json({ ok: false, error: `Notion 数据库返回 ${r.status}: ${t.slice(0, 100)}` })); }
             break;
           }
           case "BARK_KEY": {
-            const r = await fetch(`https://api.day.app/${testEnv.BARK_KEY}/${encodeURIComponent("知识库配置测试")}/${encodeURIComponent("如果你收到了这条通知说明Bark配置正确")}`);
+            const r = await fetchWithTimeout(`https://api.day.app/${testEnv.BARK_KEY}/${encodeURIComponent("知识库配置测试")}/${encodeURIComponent("如果你收到了这条通知说明Bark配置正确")}`);
             if (r.ok) { const d = await r.json().catch(() => ({})); message = d.code === 200 ? "Bark 推送已发送，请检查手机通知" : "Bark 返回: " + JSON.stringify(d); }
             else return withCors(json({ ok: false, error: `Bark 返回 ${r.status}` }));
             break;
@@ -875,6 +882,8 @@ function normalizeSourcePlatform(sourcePlatform, host = "") {
 }
 
 export function normalizeIngestPayload(input) {
+  // null/非对象输入容错
+  if (!input || typeof input !== "object") input = {};
   // 用 safeUrl 容错：非法 URL 不抛异常，host 为空则由 normalizeSourcePlatform 兜底返回"网页"
   const host = safeUrl(input.source_url || "https://example.com")?.hostname || "";
   const sourcePlatform = normalizeSourcePlatform(input.source_platform, host);
@@ -898,8 +907,8 @@ export function normalizeIngestPayload(input) {
     return t;
   }
 
-  const title = cleanTitle(stringOrEmpty(input.title).trim()) || guessTitle(text, input.source_url);
-  const sourceUrl = stringOrEmpty(input.source_url || input.url).trim();
+  const title = (cleanTitle(stringOrEmpty(input.title).trim()) || guessTitle(text, input.source_url)).slice(0, 500);
+  const sourceUrl = stringOrEmpty(input.source_url || input.url).trim().slice(0, 2000);
   const canonicalUrl = stringOrEmpty(input.canonical_url || input.canonicalUrl).trim() || sourceUrl;
 
   return {
@@ -2148,6 +2157,17 @@ function authorize(request, env) {
   const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : apiKey;
   if (token === env.INGEST_TOKEN) return { ok: true };
   return { ok: false, error: "unauthorized" };
+}
+
+// fetch 带超时（毫秒）：外部 API 调用统一走这里，避免挂起
+async function fetchWithTimeout(url, init = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function readJson(request) {

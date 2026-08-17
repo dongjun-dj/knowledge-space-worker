@@ -36,6 +36,44 @@ test("normalize tolerates invalid source_url without throwing", () => {
   assert.equal(item.source_url, "not a valid url");
 });
 
+test("normalize tolerates null input without throwing", () => {
+  const item = normalizeIngestPayload(null);
+  assert.equal(item.source_platform, "网页");
+  assert.ok(item.title.length > 0);
+});
+
+test("normalize truncates oversized title and url", () => {
+  const item = normalizeIngestPayload({
+    title: "x".repeat(10000),
+    source_url: "https://example.com/" + "y".repeat(5000),
+    text: "正文",
+  });
+  assert.ok(item.title.length <= 500, "title 应截断到 500");
+  assert.ok(item.source_url.length <= 2000, "url 应截断到 2000");
+});
+
+test("/ingest rejects empty body with 400", async () => {
+  const req = new Request("https://kb.example.com/ingest", {
+    method: "POST",
+    headers: { authorization: "Bearer secret", "content-type": "application/json" },
+    body: "",
+  });
+  const res = await handleRequest(req, { INGEST_TOKEN: "secret", kb_logs: null });
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.match(body.error, /缺少必要字段/);
+});
+
+test("/ingest accepts url-only payload (iOS shortcut format)", async () => {
+  const req = new Request("https://kb.example.com/ingest", {
+    method: "POST",
+    headers: { authorization: "Bearer secret", "content-type": "application/json" },
+    body: JSON.stringify({ url: "https://example.com/a", capture_device: "ios" }),
+  });
+  const res = await handleRequest(req, { INGEST_TOKEN: "secret", kb_logs: null, INGEST_QUEUE: null });
+  assert.equal(res.status, 200);
+});
+
 test("fallback enrichment creates summary, category and tags", () => {
   const item = normalizeIngestPayload({ title: "Coze + Dify 做 RAG", text: "用 AI Agent 做个人知识库" });
   const enriched = fallbackEnrich(item);

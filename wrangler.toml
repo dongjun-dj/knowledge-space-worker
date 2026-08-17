@@ -27,7 +27,7 @@ DEFAULT_TOP_K = "5"
 [[d1_databases]]
 binding = "kb_logs"
 database_name = "kb-logs"
-database_id = ""
+database_id = "local-dev-placeholder"
 
 [[queues.producers]]
 binding = "INGEST_QUEUE"

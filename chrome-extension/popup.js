@@ -405,7 +405,7 @@ async function handleSave() {
     
     const result = await chrome.runtime.sendMessage({
       type: "QUEUE_SAVE_CURRENT_PAGE",  // ← 异步队列类型（background.js 已支持）
-      tab: { url: pageUrl, title: pageTitle },
+      tab: { url: pageUrl, title: finalTitle },  // 用清洗后的标题，避免"(3 条新消息)"等前缀
       selectionText: selectedText,
       publishedAt: publishedAt,
       author: author,
