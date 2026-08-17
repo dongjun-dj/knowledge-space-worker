@@ -111,6 +111,7 @@ echo ""
 echo "🗄️  初始化数据库表…"
 [ -f schema.sql ]         && npx wrangler d1 execute "$DB_NAME" --file=schema.sql         >/dev/null 2>&1 && ok "日志表已就绪"         || warn "schema.sql 执行异常"
 [ -f schema-async.sql ]   && npx wrangler d1 execute "$DB_NAME" --file=schema-async.sql   >/dev/null 2>&1 && ok "异步任务表已就绪"     || warn "schema-async.sql 执行异常"
+[ -f schema-config.sql ]  && npx wrangler d1 execute "$DB_NAME" --file=schema-config.sql  >/dev/null 2>&1 && ok "配置表已就绪"         || warn "schema-config.sql 执行异常"
 
 # ─────────────────────────────────────────────
 # 6. 令牌 + 部署
