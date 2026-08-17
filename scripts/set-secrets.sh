@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# 手动设置 Cloudflare Worker Secrets（一般用配置页即可，此脚本备选）
+set -uo pipefail
 cd "$(dirname "$0")/.."
-source ~/.nvm/nvm.sh
-nvm use 20
 
-required=(INGEST_TOKEN NOTION_API_KEY NOTION_DATABASE_ID)
-optional=(COZE_API_KEY COZE_WORKFLOW_ID COZE_BASE_URL DIFY_API_KEY DIFY_DATASET_ID DIFY_BASE_URL)
+required=(INGEST_TOKEN)
+optional=(TIKHUB_API_KEY FIRECRAWL_API_KEY VOLC_ACCESS_KEY VOLC_SECRET_KEY ARK_API_KEY LLM_BASE_URL LLM_MODEL NOTION_API_KEY NOTION_DATABASE_ID BARK_KEY DIFY_API_KEY DIFY_BASE_URL DIFY_DATASET_ID JINA_API_KEY)
 
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing required env: $name" >&2
     exit 2
   fi
-  printf '%s' "${!name}" | npx wrangler secret put "$name"
+  echo "$name" | npx wrangler secret put "$name" || exit 1
 done
 
 for name in "${optional[@]}"; do
   if [[ -n "${!name:-}" ]]; then
-    printf '%s' "${!name}" | npx wrangler secret put "$name"
+    echo "$name" | npx wrangler secret put "$name" || exit 1
   else
     echo "Skip optional env: $name"
   fi
