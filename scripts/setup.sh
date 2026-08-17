@@ -140,22 +140,20 @@ else
   fi
 fi
 
-# 先检查是否已注册 workers.dev 子域名（未注册时 deploy 会交互卡住）
-# 用非交互方式探测：喂入 no，wrangler 会抛错并提示注册链接，不会卡住
+# 部署（如果账号没注册 workers.dev 子域名，deploy 会报错提示）
 echo ""
-info "检查 workers.dev 子域名是否已注册…"
-PROBE="$(printf 'no\n' | npx wrangler deploy 2>&1 || true)"
-if echo "$PROBE" | grep -qi 'register a workers.dev subdomain'; then
+info "开始部署…"
+DEPLOY_OUT="$(npx wrangler deploy 2>&1 </dev/null || true)"
+# 检查是否因子域名未注册而失败
+if echo "$DEPLOY_OUT" | grep -qi 'register a workers.dev subdomain'; then
+  echo "$DEPLOY_OUT" >&2
   echo ""
   fail "检测到你的 Cloudflare 账号尚未注册 workers.dev 子域名，无法发布 Worker。
 请先在浏览器打开以下链接，按提示注册一个子域名（一个账号只需注册一次），然后重新运行本脚本：
-  https://dash.cloudflare.com/  → 登录 → Workers & Pages → 按提示设置子域名
+  https://dash.cloudflare.com/  -> 登录 -> Workers & Pages -> 按提示设置子域名
 
 子域名建议用你的个人/品牌标识（如名字缩写），不要用项目名，因为它是账号级共用的。"
 fi
-
-# 正常部署
-DEPLOY_OUT="$(npx wrangler deploy 2>&1)"
 URL="$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -1 || true)"
 [ -n "$URL" ] || { echo "$DEPLOY_OUT" >&2; fail "部署失败"; }
 
