@@ -403,6 +403,13 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
       // 强制指定抓取器
       // 前端发 "tikhub" / "tikhub_ocr" / "firecrawl" / "jina"
+      // ⚠️ 强制选择某个抓取器但未配置对应 Key 时，明确报错提示，不做静默降级
+      if ((input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") && !env.TIKHUB_API_KEY) {
+        return withCors(json({ ok: false, error: "未配置 TIKHUB_API_KEY，无法强制使用 TikHub。请先在「配置部署」里配置 TikHub 的 API Key。" }));
+      }
+      if (input.force_fetcher === "firecrawl" && !env.FIRECRAWL_API_KEY) {
+        return withCors(json({ ok: false, error: "未配置 FIRECRAWL_API_KEY，无法强制使用 Firecrawl。请先在「配置部署」里配置 Firecrawl 的 API Key，或改选「自动」。" }));
+      }
       if ((input.force_fetcher === "tikhub" || input.force_fetcher === "tikhub_ocr") && env.TIKHUB_API_KEY) {
         const forceOCR = input.force_fetcher === "tikhub_ocr";
         try {
