@@ -64,11 +64,11 @@ test("normalizeWorkerBaseUrl removes trailing slashes and /ingest suffix", () =>
 });
 
 test("detectSourcePlatform identifies common sites", () => {
-  assert.equal(detectSourcePlatform("https://chatgpt.com/c/abc"), "chatgpt");
-  assert.equal(detectSourcePlatform("https://www.zhihu.com/question/1"), "zhihu");
-  assert.equal(detectSourcePlatform("https://www.bilibili.com/video/BV1"), "bilibili");
-  assert.equal(detectSourcePlatform("https://mp.weixin.qq.com/s/abc"), "wechat");
-  assert.equal(detectSourcePlatform("https://example.com"), "web");
+  assert.equal(detectSourcePlatform("https://chatgpt.com/c/abc"), "AI对话");
+  assert.equal(detectSourcePlatform("https://www.zhihu.com/question/1"), "知乎");
+  assert.equal(detectSourcePlatform("https://www.bilibili.com/video/BV1"), "B站");
+  assert.equal(detectSourcePlatform("https://mp.weixin.qq.com/s/abc"), "微信公众号");
+  assert.equal(detectSourcePlatform("https://example.com"), "网页");
 });
 
 test("buildIngestPayload uses selected text first and includes extension metadata", () => {
@@ -80,7 +80,7 @@ test("buildIngestPayload uses selected text first and includes extension metadat
   assert.equal(payload.source_url, "https://chatgpt.com/c/abc");
   assert.equal(payload.title, "ChatGPT - Notion API Key");
   assert.equal(payload.text, "这是一段选中的对话内容");
-  assert.equal(payload.source_platform, "chatgpt");
+  assert.equal(payload.source_platform, "AI对话");
   assert.equal(payload.capture_device, "chrome-extension");
   assert.equal(payload.capture_mode, "popup");
   assert.equal(payload.privacy, "personal");
@@ -89,7 +89,7 @@ test("buildIngestPayload uses selected text first and includes extension metadat
 test("buildIngestPayload falls back to title and url when no selected text", () => {
   const payload = buildIngestPayload({ tab: { url: "https://example.com/post", title: "Example Post" }, selectionText: "" });
   assert.equal(payload.text, "Example Post\nhttps://example.com/post");
-  assert.equal(payload.source_platform, "web");
+  assert.equal(payload.source_platform, "网页");
 });
 
 test("validateOptions requires worker url and token", () => {
@@ -103,7 +103,7 @@ test("normalizeIngestToken accepts raw token or Bearer-prefixed token", () => {
   assert.equal(normalizeIngestToken("bearer   abc123  "), "abc123");
 });
 
-test("postToWorker sends both Authorization and X-API-Key headers", async () => {
+test("postToWorker sends Bearer Authorization and normalizes token", async () => {
   const calls = [];
   const result = await postToWorker({
     workerBaseUrl: "https://example-worker.example.workers.dev/ingest/",
@@ -116,9 +116,9 @@ test("postToWorker sends both Authorization and X-API-Key headers", async () => 
   });
   assert.equal(result.ok, true);
   assert.equal(calls[0].url, "https://example-worker.example.workers.dev/ingest");
+  // 双重 Bearer 会被去重：用户误填 "Bearer xxx" 也只发一次
   assert.equal(calls[0].init.headers.Authorization, "Bearer abc123");
-  assert.equal(calls[0].init.headers["X-API-Key"], "abc123");
-  assert.equal(calls[0].init.headers["Content-Type"], "application/json");
+  assert.equal(calls[0].init.headers["Content-Type"], "application/json; charset=utf-8");
 });
 
 test("makeJobId creates unique async job ids", () => {

@@ -228,24 +228,56 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         }
 
         // 🚀 Cloudflare Queues 异步模式：投递消息后立即返回
-        await env.INGEST_QUEUE.send(JSON.stringify({ requestId, input }));
+        // 若队列未绑定（本地测试/未配置），降级为同步处理，避免 500
+        if (env.INGEST_QUEUE?.send) {
+          await env.INGEST_QUEUE.send(JSON.stringify({ requestId, input }));
 
-        // D1 记录任务状态（供 /status 查询）
-        if (env.kb_logs) {
-          const writeTask = env.kb_logs
-            .prepare(`INSERT INTO async_tasks (id, created_at, status, source_url) VALUES (?,?,?,?)`)
-            .bind(requestId, new Date().toISOString(), "processing", input.source_url || input.url || "")
-            .run()
-            .catch((e) => console.error("[queue] D1 状态写入失败:", e.message));
-          if (ctx?.waitUntil) ctx.waitUntil(writeTask);
+          // D1 记录任务状态（供 /status 查询）
+          if (env.kb_logs) {
+            const writeTask = env.kb_logs
+              .prepare(`INSERT INTO async_tasks (id, created_at, status, source_url) VALUES (?,?,?,?)`)
+              .bind(requestId, new Date().toISOString(), "processing", input.source_url || input.url || "")
+              .run()
+              .catch((e) => console.error("[queue] D1 状态写入失败:", e.message));
+            if (ctx?.waitUntil) ctx.waitUntil(writeTask);
+          }
+
+          return withCors(json({
+            ok: true,
+            async: true,
+            message: "已接收，处理完成后会推送通知",
+            request_id: requestId,
+          }, 202));
         }
 
-        return withCors(json({
-          ok: true,
-          async: true,
-          message: "已接收，处理完成后会推送通知",
-          request_id: requestId,
-        }, 202));
+        // 队列未绑定：降级同步处理
+        const startedAt = Date.now();
+        try {
+          const result = await ingest(input, env, requestId);
+          const durationMs = Date.now() - startedAt;
+          if (env.kb_logs) {
+            try {
+              const logRow = buildLogRow(requestId, input, result, durationMs);
+              await env.kb_logs
+                .prepare(`INSERT INTO ingest_logs (created_at, request_id, source_url, title, source_platform, capture_device, status, raw_payload, jina_status, jina_text_length, coze_input, coze_output, coze_error, notion_page_id, notion_page_url, notion_status, notion_error, duration_ms, error) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+                .bind(...logRow)
+                .run();
+            } catch (e) {
+              console.error("[sync-fallback] D1 日志写入失败:", e.message);
+            }
+          }
+          return withCors(json({
+            ok: true,
+            async: false,
+            fallback: true,
+            request_id: requestId,
+            duration_ms: durationMs,
+            title: result.title || input.title || "",
+            notion_page_url: result.notion_page_url || "",
+          }));
+        } catch (err) {
+          return withCors(json({ ok: false, error: err.message || String(err) }, 500));
+        }
       }
 
       // 🆕 异步任务状态查询（保留，兼容已发出的任务）
@@ -326,8 +358,11 @@ export async function handleRequest(request, env = {}, ctx = {}) {
 
     if (url.pathname === "/search" && request.method === "GET") {
       const q = url.searchParams.get("q")?.trim();
-      const token = url.searchParams.get("token") || "";
-      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
+      // 支持 URL token 或 Authorization/x-api-key header（便于程序化调用）
+      const token = url.searchParams.get("token") || request.headers.get("x-api-key") || "";
+      const auth = request.headers.get("authorization") || "";
+      const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+      if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN && bearer !== env.INGEST_TOKEN) {
         return withCors(json({ ok: false, error: "unauthorized" }, 401));
       }
       const topK = numberFrom(url.searchParams.get("top_k"), numberFrom(env.DEFAULT_TOP_K, 5));
@@ -825,7 +860,8 @@ function normalizeSourcePlatform(sourcePlatform, host = "") {
 }
 
 export function normalizeIngestPayload(input) {
-  const host = new URL(input.source_url || "https://example.com").hostname;
+  // 用 safeUrl 容错：非法 URL 不抛异常，host 为空则由 normalizeSourcePlatform 兜底返回"网页"
+  const host = safeUrl(input.source_url || "https://example.com")?.hostname || "";
   const sourcePlatform = normalizeSourcePlatform(input.source_platform, host);
   const text = stringOrEmpty(input.text || input.raw_text || input.content).trim();
   // 清洗标题：去掉知乎的私信、消息、后缀等垃圾信息
@@ -2105,18 +2141,6 @@ function withCors(response) {
   headers.set("access-control-allow-methods", "GET,POST,OPTIONS");
   headers.set("access-control-allow-headers", "authorization,content-type,x-api-key");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-function detectPlatform(url) {
-  if (!url) return "manual";
-  const host = safeUrl(url)?.hostname || "";
-  if (host.includes("zhihu.com")) return "知乎";
-  if (host.includes("bilibili.com") || host.includes("b23.tv")) return "B站";
-  if (host.includes("weixin.qq.com") || host.includes("mp.weixin.qq.com")) return "微信公众号";
-  if (host.includes("xiaohongshu.com") || host.includes("xhslink.com")) return "小红书";
-  if (host.includes("douyin.com") || host.includes("iesdouyin.com")) return "抖音";
-  if (host.includes("weishi") || host.includes("channels.weixin")) return "视频号";
-  return "网页";
 }
 
 function inferContentType(input, url) {

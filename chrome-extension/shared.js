@@ -67,11 +67,13 @@ export function buildIngestPayload({ tab = {}, selectionText = "", captureMode =
 
 export function buildAuthHeaders(ingestToken = "") {
   // INGEST_TOKEN 是 UUID/纯ASCII，可以安全放入 header
+  // 先去掉用户可能误填的 Bearer 前缀，避免 "Bearer Bearer xxx"
+  const token = normalizeIngestToken(ingestToken);
   const headers = {
     "Content-Type": "application/json; charset=utf-8",
   };
-  if (ingestToken) {
-    headers["Authorization"] = `Bearer ${ingestToken}`;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
   return headers;
 }
