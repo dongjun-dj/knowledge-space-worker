@@ -73,7 +73,13 @@ export default {
   },
   async queue(batch, env) {
     for (const msg of batch.messages) {
-      const { requestId, input } = JSON.parse(msg.body);
+      let requestId, input;
+      try {
+        ({ requestId, input } = JSON.parse(msg.body));
+      } catch (e) {
+        console.error("[queue] 消息体 JSON 解析失败:", e.message);
+        continue;
+      }
       const startedAt = Date.now();
       console.log(`[queue] 开始处理任务 ${requestId}`);
       await loadSecretsFromDB(env);
@@ -258,7 +264,7 @@ export async function handleRequest(request, env = {}, ctx = {}) {
           id: row.id,
           status: row.status,
           elapsed_ms: elapsed,
-          result: row.status === "done" && row.result_json ? JSON.parse(row.result_json) : null,
+          result: row.status === "done" && row.result_json ? (() => { try { return JSON.parse(row.result_json); } catch { return null; } })() : null,
           error: row.error || null,
         }));
       }
@@ -692,7 +698,12 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         if (!resp.ok) {
           return withCors(json({ ok: false, error: `AI API 返回 ${resp.status}`, detail: bodyText.slice(0, 500) }, 502));
         }
-        const parsed = JSON.parse(bodyText);
+        let parsed;
+        try {
+          parsed = JSON.parse(bodyText);
+        } catch (e) {
+          return withCors(json({ ok: false, error: `AI API 返回非 JSON: ${bodyText.slice(0, 200)}` }, 502));
+        }
         let content = parsed?.choices?.[0]?.message?.content || "";
         // 去掉可能的 markdown 代码块包裹
         if (content.startsWith("```")) {

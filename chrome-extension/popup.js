@@ -426,9 +426,8 @@ async function handleSave() {
     console.error("💥 收录异常:", err);
     statusEl.innerHTML = `<span class="err">❌ 异常：${err?.message || String(err)}</span>`;
   } finally {
-    // saveBtn 是模块顶部 DOMContentLoaded 里绑定的按钮，用它禁用
-    const saveBtnEl = document.getElementById("saveBtn");
-    if (saveBtnEl) saveBtnEl.disabled = false;
+    // 恢复按钮状态（HTML 中 id="save"）
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
