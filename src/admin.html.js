@@ -573,12 +573,12 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <div class="ml-3 space-y-0.5 text-gray-400">
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Title</code>（标题）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Summary</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Category</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Tags</code>（多选）</p>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source URL</code>（URL）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source Platform</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content Type</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Key Points</code>（文本）</p>
-            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Author</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Entities</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Importance</code>（数字）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Confidence</code>（单选）</p>
-            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Basis</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Captured At</code>（日期）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Published At</code>（日期）</p>
+            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Author</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Entities</code>（文本）</p>
+            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Captured At</code>（日期）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Published At</code>（日期）</p>
           </div>
           <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。</p>
           <div class="rounded-md p-3 my-2" style="background: rgba(106,154,218,0.08); border: 1px solid rgba(106,154,218,0.3);">
-            <p class="text-xs text-indigo-300 font-medium mb-2">📋 字段来源说明（15 个字段）</p>
+            <p class="text-xs text-indigo-300 font-medium mb-2">📋 字段来源说明（12 个字段）</p>
             <p class="text-xs text-gray-400 mb-1.5">以下 6 个由系统自动填充，<b class="text-gray-300">提示词改不了</b>：</p>
             <div class="text-xs text-gray-500 ml-3 space-y-0.5 mb-2">
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Source URL</code> — 你收录的链接</p>
@@ -588,11 +588,10 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Author</code> — 从页面 meta 标签 / TikHub API 提取</p>
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Published At</code> — 从源文章发布时间提取（抓不到则为空）</p>
             </div>
-            <p class="text-xs text-gray-400 mb-1.5">以下 9 个由 AI 生成，<b class="text-gray-300">可通过提示词调整</b>：</p>
+            <p class="text-xs text-gray-400 mb-1.5">以下 6 个由 AI 生成，<b class="text-gray-300">可通过提示词调整</b>：</p>
             <div class="text-xs text-gray-500 ml-3 space-y-0.5">
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Title</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Summary</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Key Points</code> — 标题 / 摘要 / 要点</p>
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Category</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Tags</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Entities</code> — 分类 / 标签 / 实体</p>
-              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Importance</code>（1-5）、<code class="bg-gray-800 px-1 rounded text-indigo-400">Confidence</code>（高/中/低）、<code class="bg-gray-800 px-1 rounded text-indigo-400">Basis</code> — 重要性 / 置信度 / 依据</p>
               <p class="text-gray-600 mt-1">⚠️ 改提示词时增减字段，需同步在 Notion 增删对应列，否则写入会报错。</p>
             </div>
           </div>

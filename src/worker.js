@@ -812,9 +812,6 @@ export async function ingest(input, env = {}) {
     source_url: enriched.source_url,
     published_at: enriched.published_at,
     author: enriched.author,
-    importance: enriched.importance,
-    confidence: enriched.confidence,
-    basis: enriched.basis,
     coze_status: enriched.coze_status,
     coze_error: enriched.coze_error || undefined,
     notion_page_url: notion.url || null,
@@ -1724,7 +1721,7 @@ async function fetchFromWayback(url) {
 // ===== 提示词默认值（可通过 D1 kb_config 表动态覆盖）=====
 const DEFAULT_SYSTEM_PROMPT = (
   "你必须输出严格的 JSON 格式，不能输出 Markdown、不能输出解释、不能输出代码块。\n"
-  + "输出的 JSON 只能包含这些字段：title, summary, key_points, category, tags, entities, importance, confidence, basis。\n"
+  + "输出的 JSON 只能包含这些字段：title, summary, key_points, category, tags, entities。\n"
   + "key_points 必须是字符串数组，不能是 markdown 列表。\n\n"
   + "你是我的个人知识空间整理助手。你负责把用户分享的网页、帖子、视频字幕、截图OCR、ChatGPT对话或文档片段整理成结构化知识条目。"
   + "你的目标不是写长文章，而是帮助我以后快速回忆、筛选、检索和复用这条信息。\n"
@@ -1735,9 +1732,6 @@ const DEFAULT_SYSTEM_PROMPT = (
   + "3.summary 不要整段抄原文，要用中文概括\n"
   + "4.summary 要包含三部分：这条内容讲了什么主题、核心判断或核心方法是什么、对我的工作/方案/客户有什么用或可以怎么复用\n"
   + "5.summary 普通内容 120-220 字，高价值内容 220-350 字，最长不超过 500 字\n"
-  + "6.importance 是1-5的数字：3=普通收藏有明确知识点，4=值得二次整理可用于工作/方案/客户交流，5=高价值长期参考可沉淀为方法论，一般情况默认从3开始判断\n"
-  + "7.confidence 只能写 高/中/低：高=有完整正文，中=有标题和较充分的选中文本，低=只有标题、链接或极短文本\n"
-  + "8.basis 要写清楚：基于什么信息生成，有没有不足"
 );
 
 const DEFAULT_USER_TEMPLATE = (
@@ -1752,9 +1746,9 @@ const DEFAULT_USER_TEMPLATE = (
   + '  "category": "从这些里面选一个：AI技术、云计算与基础设施、软件工程、数据与安全、其他技术、行业研究、商业与金融、效率工具、个人成长、社会与历史、生活、其他",\n'
   + '  "tags": ["从标签池选3-6个标签", "标签池：大模型、AI Agent、RAG、企业知识库、AI工作流、AI Coding、AI Infra、模型训练、模型推理、多模态、Prompt工程、模型评测、AI应用落地、私有化部署、云计算、云原生、虚拟化、容器、分布式存储、网络架构、高可用、性能优化、软件架构、API集成、自动化脚本、DevOps、开发范式、工程效率、数据治理、数据分析、数据库、大数据、数据隐私、网络安全、身份权限、行业趋势、企业数字化、制造业、智能制造、供应链、港口物流、汽车产业、出海全球化、信创、商业模式、产品策略、客户需求、解决方案、销售方法、竞品分析、项目管理、ROI分析、股票投资、房地产、宏观经济、货币政策、资本市场、行业轮动、国际局势、科技政策、产业政策、历史、个人知识管理、办公自动化、工作流自动化、信息检索、写作表达、学习方法、思维模型、职业发展、菜谱、美食、旅行、健康、运动、家居、其他"],\n'
   + '  "entities": "具体公司、产品、工具、人物、技术术语，多个用逗号分隔",\n'
-  + '  "importance": "1-5的数字，3是普通收藏，4是值得二次整理，5是高价值长期参考",\n'
-  + '  "confidence": "高/中/低",\n'
-  + '  "basis": "基于选中文本生成，信息完整。"\n'
+
+
+
   + "}\n\n"
   + "只输出 JSON，不要其他任何内容。"
 );
@@ -1940,7 +1934,7 @@ export async function enrichWithCoze(item, env = {}) {
     result.debug_coze_parsed = data;
     result.debug_coze_raw_body = { model: body?.model, usage: body?.usage, finish_reason: body?.choices?.[0]?.finish_reason };
 
-    console.log("[Ark] 处理完成，分类:", data.category, "置信度:", data.confidence, "标签数:", data.tags?.length || 0);
+    console.log("[Ark] 处理完成，分类:", data.category, "标签数:", data.tags?.length || 0);
 
     return result;
   } catch (error) {
@@ -1967,11 +1961,6 @@ export function fallbackEnrich(item) {
     author: "",
     published_at: "",
     entities: keywordEntities(`${item.title} ${item.text}`),
-    importance: 3,
-    confidence: item.text ? "中" : "低",
-    basis: item.text
-      ? "基于标题和已提供文本生成，未获取完整上下文。"
-      : "仅基于标题或链接生成，信息不足，需回源确认。",
     coze_status: "skipped",
   };
 }
@@ -1979,7 +1968,6 @@ export function fallbackEnrich(item) {
 function mergeEnrichment(item, data = {}, cozeStatus) {
   const fallback = fallbackEnrich(item);
   const keyPoints = data.key_points || data.keyPoints || fallback.key_points;
-  const basis = data.basis || data.limitations || data.input_basis || fallback.basis;
   return {
     ...fallback,
     ...data,
@@ -1999,9 +1987,6 @@ function mergeEnrichment(item, data = {}, cozeStatus) {
     tags: normalizeTags(data.tags || fallback.tags),
     key_points: normalizeKeyPoints(keyPoints),
     entities: normalizeEntities(data.entities || fallback.entities),
-    importance: normalizeImportance(data.importance ?? fallback.importance),
-    confidence: normalizeConfidence(data.confidence || fallback.confidence),
-    basis: stringOrEmpty(basis).trim(),
     category: stringOrEmpty(data.category || fallback.category),
     source_platform: stringOrEmpty(data.source_platform || item.source_platform),
     content_type: stringOrEmpty(data.content_type || item.content_type),
@@ -2027,9 +2012,6 @@ export async function createNotionPage(item, env = {}) {
     "Captured At": dateProp(item.captured_at),
     "Published At": item.published_at ? dateProp(item.published_at) : undefined,
     Author: richTextProp(item.author || ""),
-    Importance: numberProp(item.importance),
-    Confidence: selectProp(item.confidence),
-    Basis: richTextProp(item.basis || ""),
   };
 
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
@@ -2247,16 +2229,7 @@ function normalizeEntities(entities) {
   return stringOrEmpty(entities).trim();
 }
 
-function normalizeImportance(value) {
-  const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n)) return 3;
-  return Math.min(5, Math.max(1, n));
-}
 
-function normalizeConfidence(value) {
-  const v = stringOrEmpty(value).trim();
-  return ["高", "中", "低"].includes(v) ? v : "中";
-}
 
 async function safeJson(resp) {
   const text = await resp.text();
@@ -2547,7 +2520,23 @@ function notionChildren(item) {
     blocks.push(heading2("关键要点"));
     for (const point of item.key_points.slice(0, 8)) blocks.push(bulleted(point));
   }
+  // ✅ 正文摘录（折叠块，方便快速浏览时不占空间，展开可看原文前 1800 字）
+  const raw = truncate(item.text || "", 1800);
+  if (raw) {
+    blocks.push(toggleBlock("📖 正文摘录（可折叠）", [paragraph(raw)]));
+  }
   return blocks;
+}
+
+function toggleBlock(title, children = []) {
+  return {
+    object: "block",
+    type: "toggle",
+    toggle: {
+      rich_text: richTextArray(title),
+      children,
+    },
+  };
 }
 
 
@@ -2562,25 +2551,6 @@ function bulleted(content) {
 }
 function richTextArray(content) {
   return [{ type: "text", text: { content: truncate(String(content || ""), 2000) } }];
-}
-
-export function buildPlainTextForRag(item, notion = {}) {
-  return [
-    `标题：${item.title || ""}`,
-    `摘要：${item.summary || ""}`,
-    item.key_points?.length ? `要点：\n- ${item.key_points.join("\n- ")}` : "",
-    `分类：${item.category || ""}`,
-    `标签：${(item.tags || []).join("、")}`,
-    item.entities ? `实体：${normalizeEntities(item.entities)}` : "",
-    `来源：${item.source_platform || ""}`,
-    `内容类型：${item.content_type || ""}`,
-    item.importance ? `重要性：${item.importance}` : "",
-    item.confidence ? `置信度：${item.confidence}` : "",
-    item.basis ? `依据：${item.basis}` : "",
-    `链接：${item.source_url || ""}`,
-    notion.url ? `知识页：${notion.url}` : "",
-    item.text ? `原始文本：\n${item.text}` : "",
-  ].filter(Boolean).join("\n\n");
 }
 
 function truncate(value, max) {

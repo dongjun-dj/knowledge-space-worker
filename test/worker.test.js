@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handleRequest, normalizeIngestPayload, fallbackEnrich, buildPlainTextForRag, enrichWithCoze, createNotionPage } from "../src/worker.js";
+import { handleRequest, normalizeIngestPayload, fallbackEnrich, enrichWithCoze, createNotionPage } from "../src/worker.js";
 import { detectSourcePlatform, buildIngestPayload, buildAuthHeaders, validateOptions } from "../chrome-extension/shared.js";
 
 test("health endpoint works without auth", async () => {
@@ -131,9 +131,6 @@ test("LLM enrichment parses OpenAI-compatible response", async () => {
           tags: ["企业知识库", "RAG"],
           category: "AI技术",
           entities: "Coze, Dify",
-          importance: 4,
-          confidence: "高",
-          basis: "基于完整正文生成。",
           key_points: ["要点1"],
           source_platform: "网页",
           content_type: "article",
@@ -155,9 +152,6 @@ test("LLM enrichment parses OpenAI-compatible response", async () => {
     assert.equal(enriched.summary, "AI 摘要");
     assert.deepEqual(enriched.tags, ["企业知识库", "RAG"]);
     assert.equal(enriched.entities, "Coze, Dify");
-    assert.equal(enriched.importance, 4);
-    assert.equal(enriched.confidence, "高");
-    assert.equal(enriched.basis, "基于完整正文生成。");
   } finally {
     globalThis.fetch = oldFetch;
   }
@@ -211,9 +205,6 @@ test("Notion mapping includes enrichment fields", async () => {
       captured_at: "2026-06-24T00:00:00.000Z",
       published_at: "2026-06-20",
       author: "作者A",
-      importance: 4,
-      confidence: "中",
-      basis: "基于网页标题和选中文本生成，未获取完整评论区。",
       source_url: "https://example.com/ai-coding",
       text: "原始文本",
     }, {
@@ -225,9 +216,6 @@ test("Notion mapping includes enrichment fields", async () => {
     const payload = JSON.parse(calls[0].init.body);
     assert.deepEqual(payload.properties["Key Points"].rich_text[0].text.content, "1. AI Coding 需要工程约束\n2. TDD 属于具体开发方法");
     assert.equal(payload.properties.Entities.rich_text[0].text.content, "TDD, Cursor, Claude Code");
-    assert.equal(payload.properties.Importance.number, 4);
-    assert.equal(payload.properties.Confidence.select.name, "中");
-    assert.equal(payload.properties.Basis.rich_text[0].text.content, "基于网页标题和选中文本生成，未获取完整评论区。");
     assert.equal(payload.properties.Category.select.name, "AI技术");
     assert.deepEqual(payload.properties.Tags.multi_select.map((x) => x.name), ["AI Coding", "开发范式", "工程效率"]);
 
@@ -248,22 +236,6 @@ test("search returns disabled status when Dify is removed", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.source, "disabled");
   assert.equal(body.results.length, 0);
-});
-
-test("buildPlainTextForRag includes source links", () => {
-  const text = buildPlainTextForRag({
-    title: "标题",
-    summary: "摘要",
-    category: "AI",
-    tags: ["RAG"],
-    source_platform: "知乎",
-    source_url: "https://zhihu.com/x",
-    key_points: ["要点1"],
-    text: "原文",
-  }, { url: "https://notion.so/page" });
-  assert.match(text, /标题：标题/);
-  assert.match(text, /链接：https:\/\/zhihu.com\/x/);
-  assert.match(text, /知识页：https:\/\/notion.so\/page/);
 });
 
 // ===== chrome-extension/shared.js 测试 =====
