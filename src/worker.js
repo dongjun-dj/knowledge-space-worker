@@ -2034,7 +2034,6 @@ export async function createNotionPage(item, env = {}) {
 
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
 
-  const markdownText = buildPlainTextForRag(item);
   let resp;
   try {
     resp = await fetch("https://api.notion.com/v1/pages", {
@@ -2047,7 +2046,7 @@ export async function createNotionPage(item, env = {}) {
       body: JSON.stringify({
         parent: { database_id: env.NOTION_DATABASE_ID },
         properties,
-        children: notionChildren(item, markdownText),
+        children: notionChildren(item),
       }),
     });
   } catch (networkError) {
@@ -2539,7 +2538,7 @@ function _extractMetaImpl(md, host, result) {
   return result;
 }
 
-function notionChildren(item, ragText) {
+function notionChildren(item) {
   const blocks = [];
   // ✅ 正文保留摘要（可读性好）
   blocks.push(paragraph(`摘要：${item.summary || ""}`));
@@ -2548,25 +2547,9 @@ function notionChildren(item, ragText) {
     blocks.push(heading2("关键要点"));
     for (const point of item.key_points.slice(0, 8)) blocks.push(bulleted(point));
   }
-  // ❌ 不再输出原链接段落：属性区 Source URL 可直接点击跳转，正文重复反而不方便
-  // ✅ 检索文本：折叠块保留供未来RAG/向量检索用
-  const raw = truncate(ragText, 1800);
-  if (raw) {
-    blocks.push(toggleBlock("🔍 检索文本（RAG 索引用，可折叠）", [paragraph(raw)]));
-  }
   return blocks;
 }
 
-function toggleBlock(title, children = []) {
-  return {
-    object: "block",
-    type: "toggle",
-    toggle: {
-      rich_text: richTextArray(title),
-      children,
-    },
-  };
-}
 
 function paragraph(content) {
   return { object: "block", type: "paragraph", paragraph: { rich_text: richTextArray(content) } };
