@@ -385,6 +385,8 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       if (env.INGEST_TOKEN && token !== env.INGEST_TOKEN) {
         return withCors(json({ ok: false, error: "unauthorized" }, 401));
       }
+      // 加载 D1 中配置的 Key（和正式流程 /ingest 一致，测试页要能验证真实配置）
+      await loadSecretsFromDB(env);
       const input = await readJson(request);
       // input: { url: string, force_fetcher?: string }
       // 从分享文案中提取纯 URL（和 extractor ui.js 的 extractUrl 逻辑一致）
