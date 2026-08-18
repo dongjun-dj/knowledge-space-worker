@@ -14,9 +14,6 @@ compatibility_date = "2026-05-03"
 # npx wrangler secret put BARK_KEY
 # npx wrangler secret put VOLC_ACCESS_KEY
 # npx wrangler secret put VOLC_SECRET_KEY
-# npx wrangler secret put DIFY_API_KEY
-# npx wrangler secret put DIFY_BASE_URL
-# npx wrangler secret put DIFY_DATASET_ID
 # npx wrangler secret put JINA_API_KEY
 # 提示：也可以用部署后生成的 /admin 配置页来填（更推荐，直接写入 D1）
 

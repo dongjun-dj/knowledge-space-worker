@@ -542,9 +542,6 @@ export async function handleRequest(request, env = {}, ctx = {}) {
         INGEST_TOKEN: !!env.INGEST_TOKEN,
         VOLC_ACCESS_KEY: !!env.VOLC_ACCESS_KEY,
         VOLC_SECRET_KEY: !!env.VOLC_SECRET_KEY,
-        DIFY_API_KEY: !!env.DIFY_API_KEY,
-        DIFY_BASE_URL: !!env.DIFY_BASE_URL,
-        DIFY_DATASET_ID: !!env.DIFY_DATASET_ID,
         JINA_API_KEY: !!env.JINA_API_KEY,
       };
       return withCors(json({ ok: true, keys }));
@@ -558,7 +555,7 @@ export async function handleRequest(request, env = {}, ctx = {}) {
       }
       if (!env.kb_logs) return withCors(json({ ok: false, error: "D1 not bound" }, 500));
       const body = await readJson(request);
-      const allowed = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "DIFY_API_KEY", "DIFY_BASE_URL", "DIFY_DATASET_ID", "JINA_API_KEY"];
+      const allowed = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "JINA_API_KEY"];
       const saved = [];
       for (const key of allowed) {
         if (key in body && typeof body[key] === "string" && body[key].trim()) {
@@ -673,12 +670,6 @@ export async function handleRequest(request, env = {}, ctx = {}) {
           }
           case "INGEST_TOKEN": {
             message = "令牌格式正确，保存后即可用于鉴权";
-            break;
-          }
-          case "DIFY_API_KEY":
-          case "DIFY_BASE_URL":
-          case "DIFY_DATASET_ID": {
-            message = "Dify 配置已保存，可到「搜索/测试」页面验证检索是否正常";
             break;
           }
           case "JINA_API_KEY": {
@@ -807,7 +798,6 @@ export async function ingest(input, env = {}) {
   await fetchArticleIfNeeded(normalized, env);
   const enriched = await enrichWithCoze(normalized, env);
   const notion = await createNotionPage(enriched, env);
-  const vector = await indexDify(enriched, notion, env);
 
   return {
     ok: true,
@@ -830,8 +820,6 @@ export async function ingest(input, env = {}) {
     notion_page_url: notion.url || null,
     notion_status: notion.status,
     notion_error: notion.error || undefined,
-    vector_status: vector.status,
-    vector_document_id: vector.document_id || null,
     // 🔍 调试字段：透传给上层debug_info
     debug_coze_input: enriched.debug_coze_input,
     debug_coze_parsed: enriched.debug_coze_parsed,
@@ -848,12 +836,12 @@ export async function ingest(input, env = {}) {
 }
 
 export async function searchKnowledge(query, topK = 5, env = {}) {
-  const dify = await retrieveDify(query, topK, env);
+  // Dify 向量检索已移除，后续可用 Notion API 关键词搜索替代
   return {
     ok: true,
     query,
-    results: dify.results,
-    source: dify.source,
+    results: [],
+    source: "disabled",
   };
 }
 
@@ -1802,7 +1790,7 @@ async function loadPromptsFromDB(env) {
 }
 
 // D1 中存储的 secret key 名称
-const SECRET_KEYS = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "DIFY_API_KEY", "DIFY_BASE_URL", "DIFY_DATASET_ID", "JINA_API_KEY"];
+const SECRET_KEYS = ["ARK_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "TIKHUB_API_KEY", "FIRECRAWL_API_KEY", "NOTION_API_KEY", "NOTION_DATABASE_ID", "BARK_KEY", "VOLC_ACCESS_KEY", "VOLC_SECRET_KEY", "JINA_API_KEY"];
 
 // 从 D1 加载 secrets，覆盖到 env（D1 优先于 wrangler secret）
 async function loadSecretsFromDB(env) {
@@ -2044,7 +2032,6 @@ export async function createNotionPage(item, env = {}) {
     Confidence: selectProp(item.confidence),
     Basis: richTextProp(item.basis || ""),
     Privacy: selectProp(item.privacy),
-    "Vector Status": selectProp("pending"),
   };
 
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
@@ -2086,88 +2073,7 @@ export async function createNotionPage(item, env = {}) {
   return result;
 }
 
-export async function indexDify(item, notion, env = {}) {
-  if (!env.DIFY_API_KEY || !env.DIFY_DATASET_ID) {
-    return { status: "skipped", reason: "missing DIFY_API_KEY or DIFY_DATASET_ID" };
-  }
 
-  const baseUrl = env.DIFY_BASE_URL || "https://api.dify.ai";
-  const text = buildPlainTextForRag(item, notion);
-  let resp;
-  try {
-    resp = await fetch(`${baseUrl}/v1/datasets/${env.DIFY_DATASET_ID}/document/create_by_text`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.DIFY_API_KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        name: item.title,
-        text,
-        indexing_technique: "high_quality",
-        process_rule: { mode: "automatic" },
-      }),
-    });
-  } catch (networkError) {
-    // 网络错误：降级为 failed，不让整个收录流程崩溃
-    return { status: "failed", error: `Dify 网络错误: ${networkError.message}` };
-  }
-
-  const body = await safeJson(resp);
-  if (!resp.ok) {
-    return { status: "failed", error: body?.message || JSON.stringify(body).slice(0, 500) };
-  }
-
-  return { status: "indexed", document_id: body.document?.id || body.id || null };
-}
-
-export async function retrieveDify(query, topK, env = {}) {
-  if (!env.DIFY_API_KEY || !env.DIFY_DATASET_ID) {
-    return { source: "dify_skipped", results: [] };
-  }
-
-  const baseUrl = env.DIFY_BASE_URL || "https://api.dify.ai";
-  const resp = await fetch(`${baseUrl}/v1/datasets/${env.DIFY_DATASET_ID}/retrieve`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.DIFY_API_KEY}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      query,
-      retrieval_model: {
-        search_method: "semantic_search",
-        reranking_enable: false,
-        top_k: topK,
-        score_threshold_enabled: false,
-      },
-    }),
-  });
-
-  const body = await safeJson(resp);
-  if (!resp.ok) {
-    return { source: "dify_failed", results: [], error: body?.message || JSON.stringify(body).slice(0, 500) };
-  }
-
-  const records = body.records || body.data || [];
-  return {
-    source: "dify",
-    results: records.slice(0, topK).map((record) => {
-      const segment = record.segment || record;
-      const metadata = segment.metadata || record.metadata || {};
-      return {
-        id: segment.document_id || segment.id || record.id || null,
-        title: segment.document?.name || metadata.title || segment.title || "未命名知识",
-        summary: metadata.summary || "",
-        snippet: segment.content || record.content || "",
-        tags: normalizeTags(metadata.tags || []),
-        source_url: metadata.source_url || "",
-        notion_page_url: metadata.notion_page_url || "",
-        score: record.score ?? segment.score ?? null,
-      };
-    }),
-  };
-}
 
 function authorize(request, env) {
   if (!env.INGEST_TOKEN) return { ok: true };

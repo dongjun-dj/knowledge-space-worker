@@ -575,7 +575,6 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source URL</code>（URL）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Source Platform</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content Type</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Key Points</code>（文本）</p>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Author</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Entities</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Importance</code>（数字）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Confidence</code>（单选）</p>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Basis</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Privacy</code>（单选）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Captured At</code>（日期）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Published At</code>（日期）</p>
-            <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Vector Status</code>（单选）</p>
           </div>
           <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。</p>
           <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
@@ -1106,14 +1105,6 @@ function app() {
               id: "bark", section: "notify", icon: "🔔", title: "Bark 推送通知", purpose: "iOS 收录完成后推送通知",
               keys: [
                 { name: "BARK_KEY", short: "Key", title: "Bark 推送 Key", hint: "打开 Bark App 可看到", url: "https://apps.apple.com/app/bark/id1623918273" },
-              ],
-            },
-            {
-              id: "dify", section: "store", icon: "🧠", title: "Dify 知识库（可选）", purpose: "内容写入 Dify 数据集用于 RAG 检索",
-              keys: [
-                { name: "DIFY_API_KEY", short: "API Key", title: "Dify API Key", hint: "在 Dify 控制台「API 访问」获取", url: "https://cloud.dify.ai/" },
-                { name: "DIFY_BASE_URL", short: "Base URL", title: "Dify 服务地址", hint: "自部署填你的地址，官方云填 https://api.dify.ai", url: "" },
-                { name: "DIFY_DATASET_ID", short: "数据集 ID", title: "Dify 数据集 ID", hint: "数据集设置页里的 ID", url: "https://cloud.dify.ai/" },
               ],
             },
             {

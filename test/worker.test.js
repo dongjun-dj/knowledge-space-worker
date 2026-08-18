@@ -84,16 +84,13 @@ test("fallback enrichment creates summary, category and tags", () => {
   assert.ok(enriched.key_points.some((point) => point.includes("复用") || point.includes("检索")));
 });
 
-test("ingest calls Notion and Dify when configured", async () => {
+test("ingest calls Notion when configured", async () => {
   const calls = [];
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
     if (String(url).includes("notion.com")) {
       return new Response(JSON.stringify({ id: "page1", url: "https://notion.so/page1" }), { status: 200 });
-    }
-    if (String(url).includes("create_by_text")) {
-      return new Response(JSON.stringify({ document: { id: "doc1" } }), { status: 200 });
     }
     throw new Error(`unexpected url ${url}`);
   };
@@ -109,18 +106,15 @@ test("ingest calls Notion and Dify when configured", async () => {
       INGEST_TOKEN: "secret",
       NOTION_API_KEY: "notion-token",
       NOTION_DATABASE_ID: "db1",
-      DIFY_API_KEY: "dify-token",
-      DIFY_DATASET_ID: "dataset1",
     });
     const body = await res.json();
     assert.equal(res.status, 200);
-    // 同步模式返回结构：ok / title / notion_page_url（不含 notion_status/vector_status）
+    // 同步模式返回结构：ok / title / notion_page_url
     assert.equal(body.ok, true);
     assert.equal(body.notion_page_url, "https://notion.so/page1");
-    // 验证确实调用了 Notion 和 Dify（2 个外部调用）
+    // 验证确实调用了 Notion API
     const urls = calls.map((c) => c.url);
     assert.ok(urls.some((u) => u.includes("notion.com")), "应调用 Notion API");
-    assert.ok(urls.some((u) => u.includes("create_by_text")), "应调用 Dify API");
   } finally {
     globalThis.fetch = oldFetch;
   }
@@ -246,33 +240,15 @@ test("Notion mapping includes enrichment fields", async () => {
   }
 });
 
-test("search maps Dify records to stable result shape", async () => {
-  const oldFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    records: [{
-      score: 0.88,
-      segment: {
-        id: "seg1",
-        document_id: "doc1",
-        content: "命中片段",
-        document: { name: "标题1" },
-        metadata: { source_url: "https://example.com", tags: ["AI"] }
-      }
-    }]
-  }), { status: 200 });
-
-  try {
-    const req = new Request("https://kb.example.com/search?q=agent&top_k=3", {
-      headers: { "x-api-key": "secret" },
-    });
-    const res = await handleRequest(req, { INGEST_TOKEN: "secret", DIFY_API_KEY: "dify", DIFY_DATASET_ID: "ds" });
-    const body = await res.json();
-    assert.equal(body.results[0].title, "标题1");
-    assert.equal(body.results[0].snippet, "命中片段");
-    assert.equal(body.results[0].score, 0.88);
-  } finally {
-    globalThis.fetch = oldFetch;
-  }
+test("search returns disabled status when Dify is removed", async () => {
+  const req = new Request("https://kb.example.com/search?q=agent&top_k=3", {
+    headers: { "x-api-key": "secret" },
+  });
+  const res = await handleRequest(req, { INGEST_TOKEN: "secret" });
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.source, "disabled");
+  assert.equal(body.results.length, 0);
 });
 
 test("buildPlainTextForRag includes source links", () => {
