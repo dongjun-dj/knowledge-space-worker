@@ -232,7 +232,6 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <option value="tikhub">强制 TikHub</option>
             <option value="tikhub_ocr">强制 TikHub + OCR（小红书）</option>
             <option value="firecrawl">强制 Firecrawl</option>
-            <option value="jina">强制 Jina Reader</option>
           </select>
           <p class="text-xs text-gray-500 mt-1">
             • 自动：按代码默认优先级（TikHub -> Firecrawl）<br>
