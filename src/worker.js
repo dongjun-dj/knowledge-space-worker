@@ -918,7 +918,6 @@ export function normalizeIngestPayload(input) {
     file_url: stringOrEmpty(input.file_url),
     source_platform: sourcePlatform,
     capture_device: stringOrEmpty(input.capture_device || "unknown"),
-    privacy: stringOrEmpty(input.privacy || "personal"),
     content_type: inferContentType(input, sourceUrl),
     captured_at: new Date().toISOString(),
     // ✅ 从input读取插件端解析好的ISO日期，没有则空
@@ -2031,7 +2030,6 @@ export async function createNotionPage(item, env = {}) {
     Importance: numberProp(item.importance),
     Confidence: selectProp(item.confidence),
     Basis: richTextProp(item.basis || ""),
-    Privacy: selectProp(item.privacy),
   };
 
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);

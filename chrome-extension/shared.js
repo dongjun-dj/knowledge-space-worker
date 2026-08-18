@@ -58,7 +58,6 @@ export function buildIngestPayload({ tab = {}, selectionText = "", captureMode =
     source_platform: detectSourcePlatform(url),
     capture_device: "chrome-extension",
     capture_mode: captureMode,
-    privacy: "personal",
     content_type: "article",
     published_at: String(publishedAt || "").trim(),  // ✅ 插件解析出来的平台原始发布时间（ISO格式）
     author: String(author || "").trim(),              // ✅ 插件解析出来的平台原始作者名

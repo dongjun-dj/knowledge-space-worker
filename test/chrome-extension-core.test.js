@@ -83,7 +83,6 @@ test("buildIngestPayload uses selected text first and includes extension metadat
   assert.equal(payload.source_platform, "AI对话");
   assert.equal(payload.capture_device, "chrome-extension");
   assert.equal(payload.capture_mode, "popup");
-  assert.equal(payload.privacy, "personal");
 });
 
 test("buildIngestPayload falls back to title and url when no selected text", () => {

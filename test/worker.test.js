@@ -215,7 +215,6 @@ test("Notion mapping includes enrichment fields", async () => {
       confidence: "中",
       basis: "基于网页标题和选中文本生成，未获取完整评论区。",
       source_url: "https://example.com/ai-coding",
-      privacy: "personal",
       text: "原始文本",
     }, {
       NOTION_API_KEY: "notion-token",

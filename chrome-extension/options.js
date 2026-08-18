@@ -46,7 +46,6 @@ async function testConnection() {
         source_url: "https://example.com/chrome-extension-test",
         source_platform: "网页",
         capture_device: "chrome-extension-options",
-        privacy: "personal",
         content_type: "article",
       },
     });
