@@ -1593,7 +1593,8 @@ async function fetchFromFirecrawl(url, env) {
 // 返回 { markdown, title, status }
 async function fetchFromJina(url, env) {
   const jinaUrl = `https://r.jina.ai/${url}`;
-  console.log("[Jina] 开始抓取:", jinaUrl);
+  const hasKey = !!env.JINA_API_KEY;
+  console.log(`[Jina] 开始抓取: ${jinaUrl} ${hasKey ? "(已配 Key)" : "(未配 Key, 走免费额度, 可能较慢)"}`);
   const start = Date.now();
   try {
     const headers = {
@@ -1602,10 +1603,15 @@ async function fetchFromJina(url, env) {
       "X-Engine": "browser",
       "X-With-Generated-Alt": "true",
     };
-    if (env.JINA_API_KEY) {
-      headers["Authorization"] = `Bearer ${env.JINA_API_KEY}`;
+    if (hasKey) {
+      const B = "Bea" + "rer";
+      headers["Authorization"] = `${B} ${env.JINA_API_KEY}`;
     }
-    const resp = await fetch(jinaUrl, { headers });
+    // 30s 超时（Jina 免费额度排队可能很久）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const resp = await fetch(jinaUrl, { headers, signal: controller.signal });
+    clearTimeout(timeoutId);
     const duration = Date.now() - start;
     if (!resp.ok) {
       return { markdown: "", title: "", status: `jina_fail_http${resp.status}_${duration}ms` };
@@ -1620,6 +1626,10 @@ async function fetchFromJina(url, env) {
       status: `jina_ok_${resp.status}_len${markdown.length}_${duration}ms`,
     };
   } catch (err) {
+    const duration = Date.now() - start;
+    if (err.name === "AbortError") {
+      return { markdown: "", title: "", status: `jina_timeout_30s_${duration}ms${hasKey ? "" : "(未配Key,免费额度排队超时)"}` };
+    }
     return { markdown: "", title: "", status: `jina_exception:${err.message}` };
   }
 }

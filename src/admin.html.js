@@ -260,6 +260,14 @@ export const ADMIN_HTML = `<!DOCTYPE html>
         </div>
       </div>
 
+      <template x-if="testError">
+        <div class="border-t border-gray-800 pt-4">
+          <div class="p-3 rounded bg-red-950 border border-red-900 text-red-300 text-xs">
+            <b>❌ 测试失败：</b><span x-text="testError"></span>
+          </div>
+        </div>
+      </template>
+
       <template x-if="testResult">
         <div class="border-t border-gray-800 pt-6 space-y-4">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -858,6 +866,7 @@ function app() {
     testFetcher: "auto",
     testLoading: false,
     testResult: null,
+    testError: "",
     testTab: "md",
     // 配置部署
     configKeys: [],
@@ -987,6 +996,7 @@ function app() {
       }
       this.testLoading = true;
       this.testResult = null;
+      this.testError = "";
       try {
         const payload = {
           source_url: this.testUrl.trim(),
@@ -999,9 +1009,14 @@ function app() {
           body: JSON.stringify(payload)
         });
         const d = await r.json();
-        this.testResult = d;
+        if (!d.ok) {
+          // 后端返回错误（如强制渠道未配 Key / 抓取失败）：显示错误信息
+          this.testError = d.error || "测试失败";
+        } else {
+          this.testResult = d;
+        }
       } catch (e) {
-        alert("测试失败：" + e.message);
+        this.testError = e.message || String(e);
         console.error(e);
       } finally {
         this.testLoading = false;
@@ -1011,6 +1026,7 @@ function app() {
     clearTest() {
       this.testUrl = "";
       this.testResult = null;
+      this.testError = "";
       this.testTab = "md";
     },
 

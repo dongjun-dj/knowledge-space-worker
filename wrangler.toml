@@ -38,5 +38,6 @@ queue = "ingest-tasks"
 max_batch_size = 1
 max_batch_timeout = 1
 
-[ai]
-binding = "AI"
+# [ai] 本地测试时注释掉，避免 wrangler dev 强制连 Cloudflare
+# [ai]
+# binding = "AI"
