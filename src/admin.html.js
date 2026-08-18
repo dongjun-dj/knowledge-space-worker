@@ -577,6 +577,25 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Basis</code>（文本）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Captured At</code>（日期）、<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Published At</code>（日期）</p>
           </div>
           <p class="text-gray-500">列名必须保持英文，Notion 不区分大小写但名字要对上。</p>
+          <div class="rounded-md p-3 my-2" style="background: rgba(106,154,218,0.08); border: 1px solid rgba(106,154,218,0.3);">
+            <p class="text-xs text-indigo-300 font-medium mb-2">📋 字段来源说明（15 个字段）</p>
+            <p class="text-xs text-gray-400 mb-1.5">以下 6 个由系统自动填充，<b class="text-gray-300">提示词改不了</b>：</p>
+            <div class="text-xs text-gray-500 ml-3 space-y-0.5 mb-2">
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Source URL</code> — 你收录的链接</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Captured At</code> — 收录时间（自动取当前）</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Source Platform</code> — 按链接域名识别（知乎/小红书/B站等）</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Content Type</code> — 按平台和内容推断（文章/视频字幕/图文）</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Author</code> — 从页面 meta 标签 / TikHub API 提取</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Published At</code> — 从源文章发布时间提取（抓不到则为空）</p>
+            </div>
+            <p class="text-xs text-gray-400 mb-1.5">以下 9 个由 AI 生成，<b class="text-gray-300">可通过提示词调整</b>：</p>
+            <div class="text-xs text-gray-500 ml-3 space-y-0.5">
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Title</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Summary</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Key Points</code> — 标题 / 摘要 / 要点</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Category</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Tags</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Entities</code> — 分类 / 标签 / 实体</p>
+              <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Importance</code>（1-5）、<code class="bg-gray-800 px-1 rounded text-indigo-400">Confidence</code>（高/中/低）、<code class="bg-gray-800 px-1 rounded text-indigo-400">Basis</code> — 重要性 / 置信度 / 依据</p>
+              <p class="text-gray-600 mt-1">⚠️ 改提示词时增减字段，需同步在 Notion 增删对应列，否则写入会报错。</p>
+            </div>
+          </div>
           <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
             <p class="text-xs text-indigo-300"><b>💡 如需修改字段及字段选项，</b>可在提示词中修改输出的字段，然后在 Notion 中对应修改列名，总之两边保持一致即可。</p>
           </div>
