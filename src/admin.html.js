@@ -657,7 +657,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer <你的 INGEST_TOKEN&gt;</code> <span class="text-gray-600">（注意：Bearer 和 <你的 INGEST_TOKEN> 之间有一个空格）</span></p>
               <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>，部署成功后打印「INGEST_TOKEN: xxx」。</p>
             </div>
-            <p>⑤ 请求体改为 JSON，添加 4 个字段（点「添加新字段」逐个加）：</p>
+            <p>⑤ 请求体改为 JSON，添加 4 个字段（点「添加新字段」选择<b>文本</b>逐个加）：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_url</code> — 值选<b>「匹配」</b>（即第②步「匹配文本」提取出的链接，选变量时找「匹配文本的结果」）</p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">text</code> — 值选<b>「匹配」</b>，即「输入快捷指令的信息」全文（标题+文案，给 AI 分析用）</p>

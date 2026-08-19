@@ -137,7 +137,7 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 4. 展开请求头，添加两个请求头：
    - `Content-Type: application/json`
    - `Authorization: Bearer <你的 INGEST_TOKEN>`（注意 Bearer 和令牌之间有一个空格）
-5. 请求体改为 JSON，添加 4 个字段：
+5. 请求体改为 JSON，添加 4 个字段（点「添加新字段」选择**文本**逐个加）：
    - `source_url` — 值选「匹配」（即第 2 步「匹配文本」提取出的链接，选变量时找「匹配文本的结果」）
    - `text` — 值选「匹配」，即「输入快捷指令的信息」全文（标题+文案，给 AI 分析用）
    - `capture_device` — 直接填 `ios`（固定值，监控台用它显示 📱 iOS）
