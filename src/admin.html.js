@@ -477,7 +477,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
         <div class="text-xs text-gray-500 space-y-1.5">
           <p>🔹 <b class="text-gray-300">TikHub</b>：知乎、小红书、B站、微信公众号等平台的正文提取，<b class="text-gray-300">必须配置</b>。在 tikhub.io 注册账号即可获取 Key。</p>
           <p>🔹 <b class="text-gray-300">Firecrawl</b>：通用网页正文提取，支持的页面不全、效果一般，仅做兜底。在 firecrawl.dev 注册获取。</p>
-          <p>🔹 <b class="text-gray-300">火山引擎 OCR</b>：小红书图片文字识别，想抓小红书图文信息才需要配。在火山引擎控制台创建 Access Key。</p>
+          <p>🔹 <b class="text-gray-300">火山引擎 OCR</b>：小红书图片文字识别，想抓小红书图文信息才需要配。⚠️ <b class="text-yellow-400/80">配 AK/SK 前，先在火山引擎控制台开通免费的「通用文字识别 OCR」服务（免费 5000 次/月），路径：控制台搜索框搜「OCR」或「视觉智能 → 文字识别 → 通用文字识别」</b>。开通后再去「访问控制 → API访问密钥」创建 AK/SK。</p>
         </div>
         <div class="rounded-md p-2.5" style="background: rgba(106,154,218,0.1); border: 1px solid rgba(106,154,218,0.3);">
           <p class="text-xs text-indigo-300">💡 三个都配效果最好。至少要配置 TikHub（Firecrawl 支持的抓取页面不全、效果不好，仅做兜底），否则无法抓取网页正文。另外如果期望抓取小红书上的图文信息，就必须配置 OCR 能力。</p>
@@ -1101,7 +1101,7 @@ function app() {
             {
               id: "ocr", section: "extract", icon: "🖼️", title: "火山引擎 OCR", purpose: "小红书图片文字识别（通用文字识别服务）",
               keys: [
-                { name: "VOLC_ACCESS_KEY", short: "Access Key ID", title: "火山引擎 Access Key ID", hint: "在火山引擎控制台「访问控制 → API访问密钥」创建", url: "https://console.volcengine.com/iam/keymanage/" },
+                { name: "VOLC_ACCESS_KEY", short: "Access Key ID", title: "火山引擎 Access Key ID", hint: "⚠️ 先开通「通用文字识别 OCR」服务（免费5000次/月，控制台搜 OCR），再在这里创建 AK：访问控制 → API访问密钥", url: "https://console.volcengine.com/iam/keymanage/" },
                 { name: "VOLC_SECRET_KEY", short: "Secret Key", title: "火山引擎 Secret Access Key", hint: "与上面的 Access Key ID 配对使用，注意保密", url: "https://console.volcengine.com/iam/keymanage/" },
               ],
             },
