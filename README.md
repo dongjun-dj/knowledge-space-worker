@@ -144,7 +144,7 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 
 ### Chrome 插件配置
 
-1. 打开 `chrome://extensions/`，开启右上角「开发者模式」
+1. 用谷歌浏览器打开 `chrome://extensions/`，开启右上角「开发者模式」
 2. 点「加载已解压的扩展程序」，选中项目的 `chrome-extension/` 目录
 3. 点击插件图标 → 设置 → 填入 Worker URL 和 INGEST_TOKEN
 4. 在 macOS 系统设置 → 通知 → Google Chrome 中允许通知（否则收录完成后不会弹通知）

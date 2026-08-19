@@ -666,7 +666,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <h3 class="text-sm font-medium text-gray-300 mb-2">🌐 Chrome 插件</h3>
           <p class="text-xs text-gray-500 mb-2">插件代码在项目的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
           <div class="text-xs text-gray-500 space-y-1.5">
-            <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
+            <p>① 用<b>谷歌浏览器</b>打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
             <p>② 点「加载已解压的扩展程序」，选中项目里的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
             <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 INGEST_TOKEN，保存。</p>
           </div>
