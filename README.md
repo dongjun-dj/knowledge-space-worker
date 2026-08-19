@@ -132,13 +132,13 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 ### iOS 快捷指令配置
 
 1. 打开「快捷指令」App，新建一个快捷指令
-2. 添加操作「匹配」：匹配「输入快捷指令的信息」中的 `https?://[^\s]+`（正则，提取分享内容里的纯链接）
+2. 添加操作「**匹配文本**」（在操作列表搜「匹配」就有）：输入选「输入快捷指令的信息」，正则表达式填 `https?://[^\s]+`（提取分享内容里的纯链接）
 3. 添加操作「获取 URL 内容」，URL 填 `https://<你的Worker域名>/ingest`，方法改为 **POST**
 4. 展开请求头，添加两个请求头：
    - `Content-Type: application/json`
    - `Authorization: Bearer <你的 INGEST_TOKEN>`（注意 Bearer 和令牌之间有一个空格）
 5. 请求体改为 JSON，添加 4 个字段：
-   - `source_url` — 值选「匹配」，即第 2 步正则匹配出的链接
+   - `source_url` — 值选「匹配」（即第 2 步「匹配文本」提取出的链接，选变量时找「匹配文本的结果」）
    - `text` — 值选「匹配」，即「输入快捷指令的信息」全文（标题+文案，给 AI 分析用）
    - `capture_device` — 直接填 `ios`（固定值，监控台用它显示 📱 iOS）
    - `source_platform` — 直接填 `auto`（固定值，系统按链接域名自动识别平台）

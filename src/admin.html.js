@@ -649,7 +649,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
           <div class="text-xs text-gray-500 space-y-1.5">
             <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
-            <p>② 添加操作「匹配」：匹配「输入快捷指令的信息」中的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\s]+</code>（正则，提取分享内容里的纯链接）。</p>
+            <p>② 添加操作「<b>匹配文本</b>」（在操作列表搜「匹配」就有）：输入选「输入快捷指令的信息」，正则表达式填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\s]+</code>（作用是提取分享内容里的纯链接）。</p>
             <p>③ 添加操作「获取 URL 内容」，URL 填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code>，方法改为 <b>POST</b>。</p>
             <p>④ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
@@ -659,7 +659,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             </div>
             <p>⑤ 请求体改为 JSON，添加 4 个字段（点「添加新字段」逐个加）：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
-              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_url</code> — 值选<b>「匹配」</b>，即第②步正则匹配出的链接</p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_url</code> — 值选<b>「匹配」</b>（即第②步「匹配文本」提取出的链接，选变量时找「匹配文本的结果」）</p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">text</code> — 值选<b>「匹配」</b>，即「输入快捷指令的信息」全文（标题+文案，给 AI 分析用）</p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">capture_device</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">ios</code>（固定值，监控台用它显示 📱 iOS）</p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_platform</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">auto</code>（固定值，系统按链接域名自动识别平台）</p>
