@@ -667,7 +667,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <div class="text-xs text-gray-500 space-y-1.5">
             <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
             <p>② 点「加载已解压的扩展程序」，选中项目里的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
-            <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 Token，保存。</p>
+            <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 INGEST_TOKEN，保存。</p>
           </div>
           <div class="mt-2 rounded-md p-2.5" style="background: #2a2a1e; border: 1px solid #5a5a2d;">
             <p class="text-xs text-yellow-400/80">🔔 <b>开启通知权限</b>：收录完成后插件会弹系统通知提醒你，需在 macOS 设置 -> 通知 -> Google Chrome 中允许通知，否则只弹窗内提示。</p>
@@ -779,20 +779,20 @@ export const ADMIN_HTML = `<!DOCTYPE html>
                 <span class="text-gray-600 flex-shrink-0">①</span>
                 <div>
                   <span class="text-gray-300 font-medium">手机 iOS 快捷指令</span> -- 编辑快捷指令的 HTTP 请求头，添加：
-                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">Authorization: Bearer &lt;你的Token&gt;</code>
+                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">Authorization: Bearer &lt;你的 INGEST_TOKEN&gt;</code>
                 </div>
               </div>
               <div class="flex gap-2">
                 <span class="text-gray-600 flex-shrink-0">②</span>
                 <div>
-                  <span class="text-gray-300 font-medium">电脑浏览器插件</span> -- 打开插件设置页，把 Token 粘贴到「API Token」或「鉴权令牌」输入框
+                  <span class="text-gray-300 font-medium">电脑浏览器插件</span> -- 打开插件设置页，把 INGEST_TOKEN 粘贴到「API Token」或「鉴权令牌」输入框
                 </div>
               </div>
               <div class="flex gap-2">
                 <span class="text-gray-600 flex-shrink-0">③</span>
                 <div>
                   <span class="text-gray-300 font-medium">监控台登录</span> -- 浏览器打开时 URL 里带上：
-                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">?token=&lt;你的Token&gt;</code>
+                  <code class="text-indigo-400 bg-gray-900 px-1 py-0.5 rounded mt-1 inline-block">?token=&lt;你的 INGEST_TOKEN&gt;</code>
                 </div>
               </div>
               <div class="flex gap-2">

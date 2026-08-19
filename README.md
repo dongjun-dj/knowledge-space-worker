@@ -141,7 +141,7 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 4. 添加操作「获取 URL 内容」，方法改为 **POST**
 5. 添加两个请求头：
    - `Content-Type: application/json`
-   - `Authorization: Bearer <你的INGEST_TOKEN>`
+   - `Authorization: Bearer <你的 INGEST_TOKEN>`
 6. 请求体改为 JSON，填入：`{"url":"[[剪贴板]]"}`
 7. 保存快捷指令，可添加到分享菜单
 
