@@ -659,7 +659,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>，部署成功后打印「INGEST_TOKEN: xxx」。</p>
             </div>
             <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code> <span class="text-gray-600">（请求体选 JSON 后，下面会显示「键」和「文本」两个输入框：<b>键</b> 直接打字填 <code class="bg-gray-800 px-1 rounded text-indigo-400">url</code>（固定字段名，不需要选变量）；<b>文本</b> 不要手动打字，点输入框下方的「选择变量」，在变量列表里选「剪贴板」，会变成蓝色的「剪贴板」磁贴。最终效果等于 {"url":"[[剪贴板]]"}）</span></p>
-            <p>⑦ 保存快捷指令。</p><p>⑧ 开启「在共享表单中显示」：打开快捷指令详情页，点右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> 打开「在共享表单中显示」开关（也可以点快捷指令右下角的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标找到这个开关）。</p><p>⑨ 开启后，在任何 App 里复制链接，点分享按钮，往下滑找到「一键收录」快捷指令即可收录。</p>
+            <p>⑦ 点编辑页面中间正下方（操作列表底部）的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标，开启「在共享表单中显示」开关，然后返回保存。</p><p>⑧ 保存后，在任何 App 里复制链接，点分享按钮，往下滑找到「一键收录」快捷指令即可收录。</p>
           </div>
         </div>
         <div class="border-t border-gray-800 pt-3">
