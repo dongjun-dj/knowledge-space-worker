@@ -189,6 +189,17 @@ test("Notion mapping includes enrichment fields", async () => {
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
+    // 查询 DB schema 的请求返回所有列
+    if (String(url).includes("/v1/databases/")) {
+      return new Response(JSON.stringify({
+        properties: {
+          Title: {}, Summary: {}, "Key Points": {}, Category: {}, Tags: {},
+          Entities: {}, "Source URL": {}, "Source Platform": {}, "Content Type": {},
+          "Captured At": {}, "Published At": {}, Author: {},
+        }
+      }), { status: 200 });
+    }
+    // 创建页面的请求
     return new Response(JSON.stringify({ id: "page1", url: "https://notion.so/page1" }), { status: 200 });
   };
 
@@ -213,7 +224,8 @@ test("Notion mapping includes enrichment fields", async () => {
     });
 
     assert.equal(notion.status, "created");
-    const payload = JSON.parse(calls[0].init.body);
+    // calls[0] 是查 schema，calls[1] 是创建页面
+    const payload = JSON.parse(calls[1].init.body);
     assert.deepEqual(payload.properties["Key Points"].rich_text[0].text.content, "1. AI Coding 需要工程约束\n2. TDD 属于具体开发方法");
     assert.equal(payload.properties.Entities.rich_text[0].text.content, "TDD, Cursor, Claude Code");
     assert.equal(payload.properties.Category.select.name, "AI技术");

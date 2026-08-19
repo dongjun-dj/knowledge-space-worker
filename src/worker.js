@@ -2014,6 +2014,29 @@ export async function createNotionPage(item, env = {}) {
     Author: richTextProp(item.author || ""),
   };
 
+  // 查询 Notion 数据库 schema，只往存在的列写入（用户可能删了某些列）
+  try {
+    const dbResp = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}`, {
+      headers: {
+        authorization: `Bearer ${env.NOTION_API_KEY}`,
+        "notion-version": env.NOTION_VERSION || "2022-06-28",
+      },
+    });
+    const dbBody = await safeJson(dbResp);
+    if (dbResp.ok && dbBody?.properties) {
+      const notionColumns = new Set(Object.keys(dbBody.properties));
+      for (const key of Object.keys(properties)) {
+        if (!notionColumns.has(key)) {
+          console.log(`[Notion] 列 "${key}" 不存在，跳过`);
+          delete properties[key];
+        }
+      }
+    }
+  } catch (schemaError) {
+    // 查询失败不阻断，继续按原逻辑写入（最坏情况 Notion 返回 validation_error）
+    console.log("[Notion] 查询 DB schema 失败，跳过过滤:", schemaError.message);
+  }
+
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
 
   let resp;
@@ -2040,48 +2063,6 @@ export async function createNotionPage(item, env = {}) {
 
   const body = await safeJson(resp);
   if (!resp.ok) {
-    // 自动容错：Notion 返回 validation_error 时，解析报错的属性名，删掉后重试一次
-    // 场景：用户在 Notion 删了某列，但代码还在写该字段
-    const errStr = JSON.stringify(body);
-    if (resp.status === 400 && errStr.includes("validation")) {
-      // 尝试提取报错的属性名
-      const propMatch = errStr.match(/(?:Property|property|attributes).*?"([^"]+)"/i);
-      if (propMatch) {
-        const badProp = propMatch[1];
-        console.log(`[Notion] 属性 "${badProp}" 不存在，删除后重试`);
-        delete properties[badProp];
-      } else {
-        // 提取不到具体属性名，删掉所有非核心属性重试
-        const coreProps = ["Title", "Source URL"];
-        for (const key of Object.keys(properties)) {
-          if (!coreProps.includes(key)) delete properties[key];
-        }
-        console.log("[Notion] validation_error，删除非核心属性后重试");
-      }
-      try {
-        const resp2 = await fetch("https://api.notion.com/v1/pages", {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${env.NOTION_API_KEY}`,
-            "content-type": "application/json",
-            "notion-version": env.NOTION_VERSION || "2022-06-28",
-          },
-          body: JSON.stringify({
-            parent: { database_id: env.NOTION_DATABASE_ID },
-            properties,
-            children: notionChildren(item),
-          }),
-        });
-        const body2 = await safeJson(resp2);
-        if (resp2.ok) {
-          const result = { status: "created", page_id: body2.id, url: body2.url };
-          if (item.debug_info) item.debug_info.phase4_notionResult = result;
-          return result;
-        }
-      } catch (retryError) {
-        // 重试也失败，继续走下面的错误返回
-      }
-    }
     const message = body?.message || JSON.stringify(body).slice(0, 500);
     console.log("notion_create_failed", JSON.stringify({ status: resp.status, message, code: body?.code }));
     const result = { status: "failed", error: message };
