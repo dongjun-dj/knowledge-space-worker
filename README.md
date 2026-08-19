@@ -139,7 +139,9 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
    - `Content-Type: application/json`
    - `Authorization: Bearer <你的 INGEST_TOKEN>`
 6. 请求体改为 JSON，填入：`{"url":"[[剪贴板]]"}`
-7. 保存快捷指令，可添加到分享菜单
+7. 保存快捷指令
+8. 开启「在共享表单中显示」：快捷指令详情页右上角 `···` → 打开「在共享表单中显示」开关
+9. 开启后，在任何 App 里复制链接 → 分享按钮 → 下滑找到「一键收录」
 
 ### Chrome 插件配置
 
