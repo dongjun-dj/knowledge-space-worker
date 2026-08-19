@@ -655,10 +655,10 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <p>⑤ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
-              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer <你的 INGEST_TOKEN&gt;</code></p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer <你的 INGEST_TOKEN&gt;</code> <span class="text-gray-600">（注意：Bearer 和 <你的 INGEST_TOKEN> 之间有一个空格）</span></p>
               <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>，部署成功后打印「INGEST_TOKEN: xxx」。</p>
             </div>
-            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
+            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code> <span class="text-gray-600">（选 JSON 后添加键值对，键名 <code class="bg-gray-800 px-1 rounded text-indigo-400">url</code>，值类型选 <b>文本</b>，值填 <code class="bg-gray-800 px-1 rounded text-indigo-400">[[剪贴板]]</code>）</span></p>
             <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
           </div>
         </div>
