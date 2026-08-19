@@ -648,7 +648,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <h3 class="text-sm font-medium text-gray-300 mb-2">📱 iOS 快捷指令</h3>
           <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
           <div class="text-xs text-gray-500 space-y-1.5">
-            <p>① 打开「快捷指令」App，新建一个快捷指令，把「输入」改为<b>从共享表单接收</b>（这样以后能在任意 App 的分享菜单里调用它）。</p>
+            <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
             <p>② 添加操作「匹配」：匹配「输入快捷指令的信息」中的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\s]+</code>（正则，提取分享内容里的纯链接）。</p>
             <p>③ 添加操作「获取 URL 内容」，URL 填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code>，方法改为 <b>POST</b>。</p>
             <p>④ 展开请求头，添加两个请求头：</p>
@@ -664,7 +664,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">capture_device</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">ios</code>（固定值，监控台用它显示 📱 iOS）</p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_platform</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">auto</code>（固定值，系统按链接域名自动识别平台）</p>
             </div>
-            <p>⑥ 点编辑页面中间正下方（操作列表底部）的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标，开启「在共享表单中显示」开关，然后返回保存。</p><p>⑦ 保存后，在任何 App 里复制链接，点分享按钮，点<b>更多</b>，往下滑找到「一键收录」快捷指令即可收录（可以将快捷方式收藏，让位置靠前）。<b>小红书因平台限制，需先复制链接到微信或浏览器后才能分享。</b></p><div class="rounded-md p-2.5 my-2" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);"><p class="text-xs text-yellow-400">⚠️ <b>手机端收录超时怎么办？</b> 如果快捷指令运行很久后提示「请求超时」，通常是网络问题——<code class="bg-gray-800 px-1 rounded text-yellow-200">workers.dev</code> 域名在国内部分网络下会被墙或不稳定。解决办法：① 开启代理/VPN 后重试；② 或给 Worker 绑定自己的自定义域名（如 <code class="bg-gray-800 px-1 rounded text-yellow-200">kb.你的域名.com</code>），把快捷指令 URL 里的域名替换掉。域名需是<b>国内可正常访问的域名</b>，可在阿里云/腾讯云/万网等平台购买（绑定方法上网搜「Cloudflare Worker 绑定自定义域名」教程）。电脑端 Chrome 插件遇到同样问题也是这个原因。</p></div>
+            <p>⑥ 点编辑页面中间正下方（操作列表底部）的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标，开启「在共享表单中显示」开关（开启后顶部会自动出现「从共享表单接收」输入块，不用手动加），然后返回保存。</p><p>⑦ 保存后，在任何 App 里复制链接，点分享按钮，点<b>更多</b>，往下滑找到「一键收录」快捷指令即可收录（可以将快捷方式收藏，让位置靠前）。<b>小红书因平台限制，需先复制链接到微信或浏览器后才能分享。</b></p><div class="rounded-md p-2.5 my-2" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);"><p class="text-xs text-yellow-400">⚠️ <b>手机端收录超时怎么办？</b> 如果快捷指令运行很久后提示「请求超时」，通常是网络问题——<code class="bg-gray-800 px-1 rounded text-yellow-200">workers.dev</code> 域名在国内部分网络下会被墙或不稳定。解决办法：① 开启代理/VPN 后重试；② 或给 Worker 绑定自己的自定义域名（如 <code class="bg-gray-800 px-1 rounded text-yellow-200">kb.你的域名.com</code>），把快捷指令 URL 里的域名替换掉。域名需是<b>国内可正常访问的域名</b>，可在阿里云/腾讯云/万网等平台购买（绑定方法上网搜「Cloudflare Worker 绑定自定义域名」教程）。电脑端 Chrome 插件遇到同样问题也是这个原因。</p></div>
           </div>
         </div>
         <div class="border-t border-gray-800 pt-3">
