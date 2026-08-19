@@ -649,7 +649,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
           <div class="text-xs text-gray-500 space-y-1.5">
             <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
-            <p>② 添加操作「<b>匹配文本</b>」（在操作列表搜「匹配」就有）：输入选「输入快捷指令的信息」，正则表达式填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\s]+</code>（作用是提取分享内容里的纯链接）。</p>
+            <p>② 添加操作「<b>匹配文本</b>」（在操作列表搜「匹配」就有）：输入选「输入快捷指令的信息」，正则表达式填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\\s]+</code>（作用是提取分享内容里的纯链接）。</p>
             <p>③ 添加操作「获取 URL 内容」，URL 填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code>，方法改为 <b>POST</b>。</p>
             <p>④ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
