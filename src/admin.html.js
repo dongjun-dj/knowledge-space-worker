@@ -636,10 +636,50 @@ export const ADMIN_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Step 4: 推送通知 -->
+    <!-- Step 4: 安装客户端 -->
+    <div id="step-5" class="mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#1e2a3a;border:1px solid #2d4a6a;color:#6a9ada;">4</span>
+        <h3 class="text-sm font-semibold text-gray-200">安装客户端</h3>
+        <span class="text-xs text-gray-600">配置好后，在手机和电脑上安装收录入口</span>
+      </div>
+      <div class="card rounded-lg p-4 space-y-4">
+        <div>
+          <h3 class="text-sm font-medium text-gray-300 mb-2">📱 iOS 快捷指令</h3>
+          <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
+          <div class="text-xs text-gray-500 space-y-1.5">
+            <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
+            <p>② 添加操作「获取剪贴板」。</p>
+            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code></p>
+            <p>④ 添加操作「获取 URL 内容」，把方法改为 POST。</p>
+            <p>⑤ 展开请求头，添加两个请求头：</p>
+            <div class="ml-3 space-y-0.5 text-gray-400">
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer &lt;你的 INGEST_TOKEN&gt;</code></p>
+            </div>
+            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
+            <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
+          </div>
+        </div>
+        <div class="border-t border-gray-800 pt-3">
+          <h3 class="text-sm font-medium text-gray-300 mb-2">🌐 Chrome 插件</h3>
+          <p class="text-xs text-gray-500 mb-2">插件代码在项目的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
+          <div class="text-xs text-gray-500 space-y-1.5">
+            <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
+            <p>② 点「加载已解压的扩展程序」，选中项目里的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
+            <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 Token，保存。</p>
+          </div>
+          <div class="mt-2 rounded-md p-2.5" style="background: #2a2a1e; border: 1px solid #5a5a2d;">
+            <p class="text-xs text-yellow-400/80">🔔 <b>开启通知权限</b>：收录完成后插件会弹系统通知提醒你，需在 macOS 设置 -> 通知 -> Google Chrome 中允许通知，否则只弹窗内提示。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: 推送通知 -->
     <div id="step-4" class="mb-6">
       <div class="flex items-center gap-2 mb-3">
-        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#2a2a1e;border:1px solid #5a5a2d;color:#aaa66a;">4</span>
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#2a2a1e;border:1px solid #5a5a2d;color:#aaa66a;">5</span>
         <h3 class="text-sm font-semibold text-gray-200">配置推送通知</h3>
         <span class="text-xs text-gray-600">收录完成后推送到手机</span>
       </div>
@@ -679,46 +719,6 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <div x-show="ch.testMsg" x-transition class="mt-2 text-xs" :class="ch.testOk ? 'text-green-400' : 'text-red-400'" x-text="ch.testMsg"></div>
           </div>
         </template>
-      </div>
-    </div>
-
-    <!-- Step 5: 安装客户端 -->
-    <div id="step-5" class="mb-6">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:#1e2a3a;border:1px solid #2d4a6a;color:#6a9ada;">5</span>
-        <h3 class="text-sm font-semibold text-gray-200">安装客户端</h3>
-        <span class="text-xs text-gray-600">配置好后，在手机和电脑上安装收录入口</span>
-      </div>
-      <div class="card rounded-lg p-4 space-y-4">
-        <div>
-          <h3 class="text-sm font-medium text-gray-300 mb-2">📱 iOS 快捷指令</h3>
-          <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
-          <div class="text-xs text-gray-500 space-y-1.5">
-            <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
-            <p>② 添加操作「获取剪贴板」。</p>
-            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code></p>
-            <p>④ 添加操作「获取 URL 内容」，把方法改为 POST。</p>
-            <p>⑤ 展开请求头，添加两个请求头：</p>
-            <div class="ml-3 space-y-0.5 text-gray-400">
-              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
-              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer &lt;你的 INGEST_TOKEN&gt;</code></p>
-            </div>
-            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
-            <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
-          </div>
-        </div>
-        <div class="border-t border-gray-800 pt-3">
-          <h3 class="text-sm font-medium text-gray-300 mb-2">🌐 Chrome 插件</h3>
-          <p class="text-xs text-gray-500 mb-2">插件代码在项目的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
-          <div class="text-xs text-gray-500 space-y-1.5">
-            <p>① 打开 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome://extensions/</code>，开启右上角「开发者模式」。</p>
-            <p>② 点「加载已解压的扩展程序」，选中项目里的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">chrome-extension/</code> 目录。</p>
-            <p>③ 点击插件图标 -> 设置 -> 填入 Worker URL 和 Token，保存。</p>
-          </div>
-          <div class="mt-2 rounded-md p-2.5" style="background: #2a2a1e; border: 1px solid #5a5a2d;">
-            <p class="text-xs text-yellow-400/80">🔔 <b>开启通知权限</b>：收录完成后插件会弹系统通知提醒你，需在 macOS 设置 -> 通知 -> Google Chrome 中允许通知，否则只弹窗内提示。</p>
-          </div>
-        </div>
       </div>
     </div>
 
