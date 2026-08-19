@@ -648,18 +648,23 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <h3 class="text-sm font-medium text-gray-300 mb-2">📱 iOS 快捷指令</h3>
           <p class="text-xs text-gray-500 mb-2">在 iPhone 上用快捷指令 App 创建一个「一键收录」的快捷指令，以后在任何 App 里复制链接就能直接收录。</p>
           <div class="text-xs text-gray-500 space-y-1.5">
-            <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
-            <p>② 添加操作「获取剪贴板」。</p>
-            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code></p>
-            <p>④ 添加操作「获取 URL 内容」，把方法改为 POST。</p>
-            <p>⑤ 展开请求头，添加两个请求头：</p>
+            <p>① 打开「快捷指令」App，新建一个快捷指令，把「输入」改为<b>从共享表单接收</b>（这样以后能在任意 App 的分享菜单里调用它）。</p>
+            <p>② 添加操作「匹配」：匹配「输入快捷指令的信息」中的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https?://[^\s]+</code>（正则，提取分享内容里的纯链接）。</p>
+            <p>③ 添加操作「获取 URL 内容」，URL 填 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code>，方法改为 <b>POST</b>。</p>
+            <p>④ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer <你的 INGEST_TOKEN&gt;</code> <span class="text-gray-600">（注意：Bearer 和 <你的 INGEST_TOKEN> 之间有一个空格）</span></p>
               <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>，部署成功后打印「INGEST_TOKEN: xxx」。</p>
             </div>
-            <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code> <span class="text-gray-600">（请求体选 JSON 后，下面会显示「键」和「文本」两个输入框：<b>键</b> 直接打字填 <code class="bg-gray-800 px-1 rounded text-indigo-400">url</code>（固定字段名，不需要选变量）；<b>文本</b> 不要手动打字，点输入框下方的「选择变量」，在变量列表里选「剪贴板」，会变成蓝色的「剪贴板」磁贴。最终效果等于 {"url":"[[剪贴板]]"}）</span></p>
-            <p>⑦ 点编辑页面中间正下方（操作列表底部）的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标，开启「在共享表单中显示」开关，然后返回保存。</p><p>⑧ 保存后，在任何 App 里复制链接，点分享按钮，点<b>更多</b>，往下滑找到「一键收录」快捷指令即可收录（可以将快捷方式收藏，让位置靠前）。<b>小红书因平台限制，需先复制链接到微信或浏览器后才能分享。</b></p><div class="rounded-md p-2.5 my-2" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);"><p class="text-xs text-yellow-400">⚠️ <b>手机端收录超时怎么办？</b> 如果快捷指令运行很久后提示「请求超时」，通常是网络问题——<code class="bg-gray-800 px-1 rounded text-yellow-200">workers.dev</code> 域名在国内部分网络下会被墙或不稳定。解决办法：① 开启代理/VPN 后重试；② 或给 Worker 绑定自己的自定义域名（如 <code class="bg-gray-800 px-1 rounded text-yellow-200">kb.你的域名.com</code>），把快捷指令 URL 里的域名替换掉。域名需是<b>国内可正常访问的域名</b>，可在阿里云/腾讯云/万网等平台购买（绑定方法上网搜「Cloudflare Worker 绑定自定义域名」教程）。电脑端 Chrome 插件遇到同样问题也是这个原因。</p></div>
+            <p>⑤ 请求体改为 JSON，添加 4 个字段（点「添加新字段」逐个加）：</p>
+            <div class="ml-3 space-y-0.5 text-gray-400">
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_url</code> — 值选<b>「匹配」</b>，即第②步正则匹配出的链接</p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">text</code> — 值选<b>「匹配」</b>，即「输入快捷指令的信息」全文（标题+文案，给 AI 分析用）</p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">capture_device</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">ios</code>（固定值，监控台用它显示 📱 iOS）</p>
+              <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">source_platform</code> — 直接填 <code class="bg-gray-800 px-1 rounded text-indigo-400">auto</code>（固定值，系统按链接域名自动识别平台）</p>
+            </div>
+            <p>⑥ 点编辑页面中间正下方（操作列表底部）的 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">i</code> 图标，开启「在共享表单中显示」开关，然后返回保存。</p><p>⑦ 保存后，在任何 App 里复制链接，点分享按钮，点<b>更多</b>，往下滑找到「一键收录」快捷指令即可收录（可以将快捷方式收藏，让位置靠前）。<b>小红书因平台限制，需先复制链接到微信或浏览器后才能分享。</b></p><div class="rounded-md p-2.5 my-2" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);"><p class="text-xs text-yellow-400">⚠️ <b>手机端收录超时怎么办？</b> 如果快捷指令运行很久后提示「请求超时」，通常是网络问题——<code class="bg-gray-800 px-1 rounded text-yellow-200">workers.dev</code> 域名在国内部分网络下会被墙或不稳定。解决办法：① 开启代理/VPN 后重试；② 或给 Worker 绑定自己的自定义域名（如 <code class="bg-gray-800 px-1 rounded text-yellow-200">kb.你的域名.com</code>），把快捷指令 URL 里的域名替换掉。域名需是<b>国内可正常访问的域名</b>，可在阿里云/腾讯云/万网等平台购买（绑定方法上网搜「Cloudflare Worker 绑定自定义域名」教程）。电脑端 Chrome 插件遇到同样问题也是这个原因。</p></div>
           </div>
         </div>
         <div class="border-t border-gray-800 pt-3">
