@@ -598,8 +598,8 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
             <p class="text-xs text-indigo-300"><b>💡 可调整的内容：</b>摘要字数范围、要点条数、分类列表选项、标签池内容、实体识别范围——这些都在用户提示词里对应的字段行修改，不影响字段数量。</p>
           </div>
-          <p>③ 把数据库分享给刚才创建的集成：点数据库右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> Connections -> 添加你创建的集成。</p>
-          <p>④ 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是。例如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">notion.so/你的工作区/DATABASE_ID?v=...</code>，取 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 前面的那串。</p>
+          <p>③ 把数据库分享给刚才创建的集成：点数据库页面右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> <b>集成</b> -> 在搜索框输入你创建的集成名称 -> 点弹窗里的「添加到页面」。</p>
+          <p>④ 获取数据库 ID：看浏览器地址栏 URL，<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">/p/</code> 后面到 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 之前那串 32 位字符就是。例如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">app.notion.com/p/3c095c5c...a?v=...</code>，取 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 前面的那串。</p>
         </div>
         <div class="rounded-md p-2.5" style="background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.3);">
           <p class="text-xs text-yellow-400">⚠️ 第③步一定要做，否则集成没有权限写入数据库。</p>
