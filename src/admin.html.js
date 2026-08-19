@@ -689,7 +689,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
         <div class="text-xs text-gray-500 space-y-1.5">
           <p>🔹 <b class="text-gray-300">Bark</b> 是一个免费的 iOS 推送 App，收录完成后手机会收到通知。</p>
           <p>① 在 App Store 搜索并安装 Bark。</p>
-          <p>② 打开 Bark，首页会显示你的 Key（一串字符）。</p>
+          <p>② 打开 Bark，首页顶部会显示一条 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://api.day.app/xxxxxxxx</code> 的链接，<b class="text-gray-300">最后那串 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">/</code> 后面的字符就是你的 Key</b>（如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">BeUcGnnJVgYiFfKDw4DFac</code>），复制它填到下方卡片。页面其他内容（推送标题/铃声/测试URL）都不用管。</p>
         </div>
         <p class="text-xs text-gray-400 pt-1">点击下方卡片填入 Bark Key 即可。</p>
       </div>
@@ -1123,7 +1123,7 @@ function app() {
             {
               id: "bark", section: "notify", icon: "🔔", title: "Bark 推送通知", purpose: "iOS 收录完成后推送通知",
               keys: [
-                { name: "BARK_KEY", short: "Key", title: "Bark 推送 Key", hint: "打开 Bark App 可看到", url: "https://apps.apple.com/app/bark/id1623918273" },
+                { name: "BARK_KEY", short: "Key", title: "Bark 推送 Key", hint: "打开 Bark App，首页 api.day.app/ 后面那串字符就是 Key", url: "https://apps.apple.com/app/bark/id1623918273" },
               ],
             },
             {
