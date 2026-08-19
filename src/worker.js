@@ -1994,6 +1994,10 @@ function mergeEnrichment(item, data = {}, cozeStatus) {
   };
 }
 
+// Notion schema 内存缓存：database_id -> { ts, columns }
+const _notionSchemaCache = {};
+
+// Notion schema 内存缓存：database_id -> { ts, columns }
 export async function createNotionPage(item, env = {}) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
     return { status: "skipped", reason: "missing NOTION_API_KEY or NOTION_DATABASE_ID" };
@@ -2015,16 +2019,24 @@ export async function createNotionPage(item, env = {}) {
   };
 
   // 查询 Notion 数据库 schema，只往存在的列写入（用户可能删了某些列）
+  // 内存缓存 5 分钟，避免每次收录都多调一次 API
   try {
-    const dbResp = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}`, {
-      headers: {
-        authorization: `Bearer ${env.NOTION_API_KEY}`,
-        "notion-version": env.NOTION_VERSION || "2022-06-28",
-      },
-    });
-    const dbBody = await safeJson(dbResp);
-    if (dbResp.ok && dbBody?.properties) {
-      const notionColumns = new Set(Object.keys(dbBody.properties));
+    const cacheKey = env.NOTION_DATABASE_ID;
+    const now = Date.now();
+    if (!_notionSchemaCache[cacheKey] || now - _notionSchemaCache[cacheKey].ts > 300000) {
+      const dbResp = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}`, {
+        headers: {
+          authorization: `Bearer ${env.NOTION_API_KEY}`,
+          "notion-version": env.NOTION_VERSION || "2022-06-28",
+        },
+      });
+      const dbBody = await safeJson(dbResp);
+      if (dbResp.ok && dbBody?.properties) {
+        _notionSchemaCache[cacheKey] = { ts: now, columns: new Set(Object.keys(dbBody.properties)) };
+      }
+    }
+    if (_notionSchemaCache[cacheKey]?.columns) {
+      const notionColumns = _notionSchemaCache[cacheKey].columns;
       for (const key of Object.keys(properties)) {
         if (!notionColumns.has(key)) {
           console.log(`[Notion] 列 "${key}" 不存在，跳过`);
@@ -2036,6 +2048,7 @@ export async function createNotionPage(item, env = {}) {
     // 查询失败不阻断，继续按原逻辑写入（最坏情况 Notion 返回 validation_error）
     console.log("[Notion] 查询 DB schema 失败，跳过过滤:", schemaError.message);
   }
+
 
   Object.keys(properties).forEach((key) => properties[key] === undefined && delete properties[key]);
 
