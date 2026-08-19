@@ -592,11 +592,11 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <div class="text-xs text-gray-500 ml-3 space-y-0.5">
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Title</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Summary</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Key Points</code> — 标题 / 摘要 / 要点</p>
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Category</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Tags</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Entities</code> — 分类 / 标签 / 实体</p>
-              <p class="text-gray-600 mt-1">⚠️ 改提示词时增减字段，需同步在 Notion 增删对应列，否则写入会报错。</p>
+              <p class="text-gray-600 mt-1">⚠️ 这 6 个字段名是固定的，不能增减。但每个字段的内容要求（摘要字数、要点条数、分类选项、标签池等）可以在提示词里自由调整。</p>
             </div>
           </div>
           <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
-            <p class="text-xs text-indigo-300"><b>💡 如需修改字段及字段选项，</b>可在提示词中修改输出的字段，然后在 Notion 中对应修改列名，总之两边保持一致即可。</p>
+            <p class="text-xs text-indigo-300"><b>💡 可调整的内容：</b>摘要字数范围、要点条数、分类列表选项、标签池内容、实体识别范围——这些都在用户提示词里对应的字段行修改，不影响字段数量。</p>
           </div>
           <p>③ 把数据库分享给刚才创建的集成：点数据库右上角 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">···</code> -> Connections -> 添加你创建的集成。</p>
           <p>④ 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是。例如 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">notion.so/你的工作区/DATABASE_ID?v=...</code>，取 <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">?</code> 前面的那串。</p>
