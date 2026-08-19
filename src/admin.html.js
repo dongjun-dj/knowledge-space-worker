@@ -592,7 +592,7 @@ export const ADMIN_HTML = `<!DOCTYPE html>
             <div class="text-xs text-gray-500 ml-3 space-y-0.5">
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Title</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Summary</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Key Points</code> — 标题 / 摘要 / 要点</p>
               <p>• <code class="bg-gray-800 px-1 rounded text-indigo-400">Category</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Tags</code>、<code class="bg-gray-800 px-1 rounded text-indigo-400">Entities</code> — 分类 / 标签 / 实体</p>
-              <p class="text-gray-600 mt-1">⚠️ 这 6 个字段名是固定的，不能增减。但每个字段的内容要求（摘要字数、要点条数、分类选项、标签池等）可以在提示词里自由调整。</p>
+              <p class="text-gray-600 mt-1">⚠️ 这 6 个字段名是固定的，不能增减。但每个字段的内容要求（摘要字数、要点条数、分类选项、标签池等）可以在提示词里自由调整。如果增删字段或 Notion 上字段不匹配，系统都会报错。</p>
             </div>
           </div>
           <div class="rounded-md p-2.5 my-2" style="background: rgba(106,154,218,0.12); border: 1px solid rgba(106,154,218,0.4);">
