@@ -650,13 +650,13 @@ export const ADMIN_HTML = `<!DOCTYPE html>
           <div class="text-xs text-gray-500 space-y-1.5">
             <p>① 打开「快捷指令」App，新建一个快捷指令。</p>
             <p>② 添加操作「获取剪贴板」。</p>
-            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code> <span class="text-gray-600">（结尾的 <code class="bg-gray-800 px-1 rounded text-indigo-400">/ingest</code> 是收录接口路径，固定写法，不用改）</span></p>
+            <p>③ 添加操作「URL」，填入你的收录地址：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">https://&lt;你的Worker域名&gt;/ingest</code></p>
             <p>④ 添加操作「获取 URL 内容」，把方法改为 POST。</p>
             <p>⑤ 展开请求头，添加两个请求头：</p>
             <div class="ml-3 space-y-0.5 text-gray-400">
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Content-Type: application/json</code></p>
               <p>• <code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">Authorization: Bearer <你的 INGEST_TOKEN&gt;</code></p>
-              <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>（和 URL 里的 <code class="bg-gray-800 px-1 rounded text-indigo-400">/ingest</code> 不同，这个才是你的钥匙），部署成功后打印「INGEST_TOKEN: xxx」，也会保存在项目里的 <code class="bg-gray-800 px-1 rounded text-indigo-400">.secrets.local</code> 文件。就是本页「收录鉴权」卡片里那个值。</p>
+              <p class="text-gray-600">👉 <b class="text-gray-400">INGEST_TOKEN 就是部署时打印的令牌</b>，部署成功后打印「INGEST_TOKEN: xxx」，也会保存在项目里的 <code class="bg-gray-800 px-1 rounded text-indigo-400">.secrets.local</code> 文件。就是本页「收录鉴权」卡片里那个值。</p>
             </div>
             <p>⑥ 请求体改为 JSON，填入：<code class="bg-gray-800 px-1.5 py-0.5 rounded text-indigo-400">{"url":"[[剪贴板]]"}</code></p>
             <p>⑦ 保存快捷指令。可以在分享菜单里添加它，以后在任何 App 里复制链接，从分享菜单直接收录。</p>
