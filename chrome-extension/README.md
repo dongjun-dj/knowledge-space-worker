@@ -25,7 +25,7 @@
 2. Worker URL 填你部署后得到的地址（去掉 `/admin?...` 部分，形如）：
 
 ```text
-https://<你的worker域名>.workers.dev
+https://<你的Worker域名>.workers.dev
 ```
 
 3. INGEST_TOKEN 填当前有效 token。
