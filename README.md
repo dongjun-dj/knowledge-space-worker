@@ -101,8 +101,8 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
 | 1 | 内容提取 | TikHub（知乎/小红书/B站/公众号）、Firecrawl（通用兜底）、火山引擎 OCR（小红书图片） |
 | 2 | AI 分析 | 支持 OpenAI 兼容接口的大模型（火山引擎豆包/DeepSeek/OpenAI 等） |
 | 3 | 写入知识库 | Notion 数据库（需提前创建集成和数据库） |
-| 4 | 推送通知 | Bark 推送（仅手机端需要，电脑端 Chrome 插件自带通知） |
-| 5 | 安装客户端 | Chrome 插件 + iOS 快捷指令 |
+| 4 | 安装客户端 | Chrome 插件 + iOS 快捷指令 |
+| 5 | 推送通知 | Bark 推送（仅手机端需要，电脑端 Chrome 插件自带通知） |
 
 ### Notion 数据库准备
 
@@ -118,19 +118,15 @@ https://<你的Worker域名>.workers.dev/admin?token=<上面的 INGEST_TOKEN>
    | Key Points | 文本 |
    | Category | 单选 |
    | Tags | 多选 |
+   | Entities | 文本 |
    | Source URL | URL |
    | Source Platform | 单选 |
    | Content Type | 单选 |
    | Author | 文本 |
-   | Importance | 数字 |
-   | Confidence | 单选 |
-   | Entities | 文本 |
-   | Basis | 文本 |
-   | Privacy | 单选 |
    | Captured At | 日期 |
    | Published At | 日期 |
 
-3. 把数据库分享给刚才创建的集成（数据库右上角 `···` → Connections → 添加集成）
+3. 把数据库分享给刚才创建的集成（数据库页面右上角 `···` → 集成 → 搜索集成名称 → 添加到页面）
 4. 获取数据库 ID：看数据库的 URL，中间那串 32 位字符就是
 
 ### iOS 快捷指令配置
